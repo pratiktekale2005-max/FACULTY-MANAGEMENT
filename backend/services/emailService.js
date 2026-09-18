@@ -106,4 +106,157 @@ const sendWelcomeEmail = async (userEmail, userName, userRole, deptName, princip
     }
 };
 
-module.exports = { sendOtpEmail, sendWelcomeEmail };
+const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, time, venue, organizerName, deptName, institutionName, customHtml, attachmentBase64 }) => {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!guestEmail) {
+        throw new Error("Guest email address is required to dispatch invitation ❌");
+    }
+
+    if (!emailUser || !emailPass) {
+        console.warn("⚠️ SMTP Credentials (EMAIL_USER/EMAIL_PASS) are missing in environment variables. Email logged to console.");
+        console.log(`[MOCK EMAIL DISPATCH] Invitation for "${eventTitle}" successfully prepared and addressed to ${guestEmail} (${guestName}).`);
+        return { success: true, simulated: true, recipient: guestEmail };
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: emailUser,
+                pass: emailPass,
+            },
+        });
+
+        const defaultHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px;">
+                    <h2 style="color: #4f46e5; margin: 0; font-size: 20px; font-weight: bold;">${institutionName || "EduCRM Academic Institution"}</h2>
+                    <p style="margin: 3px 0 0 0; font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">Department of ${deptName || "Academic Affairs"}</p>
+                </div>
+                <p style="font-size: 14px; font-weight: bold; color: #1e293b;">To: ${guestName || "Distinguished Resource Person"},</p>
+                <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+                    On behalf of the Department of <strong>${deptName || "Engineering"}</strong> at <strong>${institutionName || "our Institution"}</strong>, 
+                    we have the honor and privilege to cordially invite you as our distinguished Guest Speaker for the upcoming <strong>${eventType || "Workshop"}</strong>:
+                </p>
+                <div style="background-color: #f8fafc; border-left: 4px solid #4f46e5; padding: 15px 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin: 0 0 8px 0; color: #1e1b4b; font-size: 16px; font-weight: bold;">${eventTitle}</h3>
+                    <p style="margin: 4px 0; font-size: 13px; color: #475569;"><strong>📅 Date:</strong> ${date || "To be confirmed"}</p>
+                    <p style="margin: 4px 0; font-size: 13px; color: #475569;"><strong>⏰ Time:</strong> ${time || "Morning Session"}</p>
+                    <p style="margin: 4px 0; font-size: 13px; color: #475569;"><strong>📍 Venue:</strong> ${venue || "Campus Seminar Auditorium"}</p>
+                    <p style="margin: 4px 0; font-size: 13px; color: #475569;"><strong>👤 Event Coordinator:</strong> ${organizerName || "Department Faculty"}</p>
+                </div>
+                <p style="font-size: 13px; color: #475569; line-height: 1.5;">
+                    Your esteemed domain expertise will provide invaluable insights to our students and faculty members. We look forward to your valuable presence.
+                </p>
+                <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                    <p style="margin: 0;">Warm regards,<br/><strong>${organizerName || "Head of Department & Event Committee"}</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
+                </div>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            to: guestEmail,
+            subject: `Official Academic Invitation: ${eventTitle} (${eventType || "Workshop"})`,
+            html: customHtml || defaultHtml,
+        };
+
+        if (attachmentBase64) {
+            const matches = attachmentBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+                mailOptions.attachments = [{
+                    filename: `Invitation_${(eventTitle || "Letter").replace(/\s+/g, "_")}.pdf`,
+                    content: matches[2],
+                    encoding: "base64"
+                }];
+            }
+        }
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[EMAIL SERVICE] Successfully dispatched invitation to ${guestEmail} 📧`);
+        return { success: true, recipient: guestEmail };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] SMTP error while dispatching invitation:", err);
+        throw new Error(err.message || "Failed to dispatch invitation email via SMTP ❌");
+    }
+};
+
+const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, organizerName, deptName, institutionName, customHtml, attachmentBase64 }) => {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!guestEmail) {
+        throw new Error("Guest email address is required to dispatch thanking letter ❌");
+    }
+
+    if (!emailUser || !emailPass) {
+        console.warn("⚠️ SMTP Credentials (EMAIL_USER/EMAIL_PASS) are missing in environment variables. Email logged to console.");
+        console.log(`[MOCK EMAIL DISPATCH] Appreciation letter for "${eventTitle}" successfully prepared and addressed to ${guestEmail} (${guestName}).`);
+        return { success: true, simulated: true, recipient: guestEmail };
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: emailUser,
+                pass: emailPass,
+            },
+        });
+
+        const defaultHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
+                <div style="border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px;">
+                    <h2 style="color: #059669; margin: 0; font-size: 20px; font-weight: bold;">Letter of Appreciation & Gratitude</h2>
+                    <p style="margin: 3px 0 0 0; font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">${institutionName || "EduCRM Academic Institution"} &bull; Department of ${deptName || "Academic Affairs"}</p>
+                </div>
+                <p style="font-size: 14px; font-weight: bold; color: #1e293b;">Dear ${guestName || "Distinguished Speaker"},</p>
+                <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+                    On behalf of <strong>${institutionName || "our Institution"}</strong> and the Department of <strong>${deptName || "Engineering"}</strong>, 
+                    we extend our heartfelt gratitude for graciously delivering the session during our <strong>${eventType || "Workshop"}</strong> on:
+                </p>
+                <div style="background-color: #f0fdf4; border-left: 4px solid #059669; padding: 15px 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin: 0 0 8px 0; color: #064e3b; font-size: 16px; font-weight: bold;">${eventTitle}</h3>
+                    <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>📅 Date of Conduction:</strong> ${date || "Recently Conducted"}</p>
+                    <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>👤 Facilitated by:</strong> ${organizerName || "Department Faculty"}</p>
+                </div>
+                <p style="font-size: 13px; color: #475569; line-height: 1.5;">
+                    Your profound insights, practical industry illustrations, and engaging interaction received exceptional feedback from all participating faculty and students. 
+                    We truly appreciate the time and dedication you shared with our institution and look forward to continued academic collaboration.
+                </p>
+                <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                    <p style="margin: 0;">With sincere regards,<br/><strong>${organizerName || "Department Faculty"} & Principal</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
+                </div>
+            </div>
+        `;
+
+        const mailOptions = {
+            from: `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            to: guestEmail,
+            subject: `Letter of Gratitude & Appreciation: ${eventTitle}`,
+            html: customHtml || defaultHtml,
+        };
+
+        if (attachmentBase64) {
+            const matches = attachmentBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (matches && matches.length === 3) {
+                mailOptions.attachments = [{
+                    filename: `Appreciation_${(eventTitle || "Letter").replace(/\s+/g, "_")}.pdf`,
+                    content: matches[2],
+                    encoding: "base64"
+                }];
+            }
+        }
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[EMAIL SERVICE] Successfully dispatched thanking letter to ${guestEmail} 📧`);
+        return { success: true, recipient: guestEmail };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] SMTP error while dispatching thanking letter:", err);
+        throw new Error(err.message || "Failed to dispatch appreciation letter via SMTP ❌");
+    }
+};
+
+module.exports = { sendOtpEmail, sendWelcomeEmail, sendInvitationEmail, sendThankingEmail };

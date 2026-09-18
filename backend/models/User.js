@@ -21,6 +21,7 @@ const userSchema = new mongoose.Schema({
     subjectsHandled: [String],
     employeeId: { type: String, sparse: true },
     status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE" },
+    password: { type: String, select: false, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     createdAt: { type: Date, default: Date.now }
 });
@@ -32,8 +33,20 @@ userSchema.virtual("fullName")
     .get(function() { return this.name; })
     .set(function(val) { this.name = val; });
 
-userSchema.set("toJSON", { virtuals: true });
-userSchema.set("toObject", { virtuals: true });
+userSchema.set("toJSON", { 
+    virtuals: true,
+    transform: (doc, ret) => {
+        delete ret.password;
+        return ret;
+    }
+});
+userSchema.set("toObject", { 
+    virtuals: true,
+    transform: (doc, ret) => {
+        delete ret.password;
+        return ret;
+    }
+});
 
 module.exports = mongoose.models.User || mongoose.model("User", userSchema);
 

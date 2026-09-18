@@ -10,21 +10,24 @@ import StudentManagement from "../components/StudentManagement";
 import StudentFeedback from "../components/StudentFeedback";
 import InvitationsLetters from "../components/InvitationsLetters";
 import HODDashboard from "../components/HODDashboard";
-import KPIManagement from "../components/KPIManagement";
 import ApprovalCenter from "../components/ApprovalCenter";
 import FacultyPerformance from "../components/FacultyPerformance";
 import TasksPanel from "../components/TasksPanel";
-import UserManagement from "../components/UserManagement";
+import DesignationAssignment from "../components/DesignationAssignment";
 import OrganizationSettings from "../components/OrganizationSettings";
 import DepartmentManagement from "../components/DepartmentManagement";
 import FacultyManagement from "../components/FacultyManagement";
 import HODManagement from "../components/HODManagement";
 import CertificationsPanel from "../components/CertificationsPanel";
 import AssignmentsPanel from "../components/AssignmentsPanel";
+import DepartmentFacultyView from "../components/DepartmentFacultyView";
+import FacultyDetailedProfile from "../components/FacultyDetailedProfile";
 import { api } from "../services/api";
 
 function Dashboard({ currentUser, onLogout }) {
     const [currentTab, setCurrentTab] = useState("overview");
+    const [selectedDepartment, setSelectedDepartment] = useState(null); // { code: "AID", name: "..." }
+    const [selectedFacultyProfile, setSelectedFacultyProfile] = useState(null); // faculty object or ID
     const [theme, setTheme] = useState("dark");
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -113,8 +116,17 @@ function Dashboard({ currentUser, onLogout }) {
     }, [refreshTrigger]);
 
     const getTabTitle = () => {
+        if (currentTab === "overview") {
+            if (selectedFacultyProfile) {
+                return `${selectedFacultyProfile.name || "Faculty"} - Detailed Profile`;
+            }
+            if (selectedDepartment) {
+                return `${selectedDepartment.code} Department - Faculty Directory`;
+            }
+            return "Dashboard";
+        }
         switch (currentTab) {
-            case "overview": return "Overview Dashboard";
+            case "overview": return "Dashboard";
             case "faculty": return "Faculty Directory & Portfolios";
             case "faculty-performance": return "Faculty Performance Scorecard";
             case "tasks": return "Assign & Track Tasks";
@@ -129,14 +141,14 @@ function Dashboard({ currentUser, onLogout }) {
             case "students": return "Student Roster Management";
             case "feedback": return "Student Course Evaluations";
             case "invitations": return currentUser.role === "HOD" ? "Department Appointment Letters" : "Official Letters & Templates";
-            case "users": return "User & Access Management";
+            case "users": return "Designation Assignment";
             case "settings": return "Institution Profile Settings";
             case "departments": return "Department Registry Management";
-            case "faculty-mgmt": return "Faculty Roster Management";
+            case "faculty-mgmt": return "All Faculty";
             case "hod-mgmt": return "Department Leadership (HODs)";
             case "certifications": return "My Certifications Portfolio";
             case "assignments": return "Subject Assignments Management";
-            default: return "Steering Dashboard";
+            default: return "Dashboard";
         }
     };
 
@@ -144,7 +156,12 @@ function Dashboard({ currentUser, onLogout }) {
         const isActive = currentTab === tab;
         return (
             <button
-                onClick={() => { setCurrentTab(tab); setIsMobileSidebarOpen(false); }}
+                onClick={() => { 
+                    setCurrentTab(tab); 
+                    setSelectedDepartment(null);
+                    setSelectedFacultyProfile(null);
+                    setIsMobileSidebarOpen(false); 
+                }}
                 className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} text-xs font-semibold rounded-xl transition-all text-left ${
                     isActive 
                         ? "bg-indigo-650 text-white shadow-lg shadow-indigo-650/15" 
@@ -236,13 +253,6 @@ function Dashboard({ currentUser, onLogout }) {
                                 </div>
 
                                 <div>
-                                    {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">KPI & Targets</p>}
-                                    <div className="space-y-1">
-                                        {renderNavButton("kpis", "🎯", "Manage KPIs")}
-                                    </div>
-                                </div>
-
-                                <div>
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Approvals</p>}
                                     <div className="space-y-1">
                                         {renderNavButton("approvals", "🔔", "Pending Approvals")}
@@ -285,7 +295,7 @@ function Dashboard({ currentUser, onLogout }) {
                                 <div>
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Main</p>}
                                     <div className="space-y-1">
-                                        {renderNavButton("overview", "📊", "Overview Dashboard")}
+                                        {renderNavButton("overview", "📊", "Dashboard")}
                                     </div>
                                 </div>
 
@@ -307,7 +317,6 @@ function Dashboard({ currentUser, onLogout }) {
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Profile & Publications</p>}
                                     <div className="space-y-1">
                                         {renderNavButton("papers", "📝", "Research Papers")}
-                                        {currentUser.role === "Principal" && renderNavButton("kpis", "🎯", "KPI Targets")}
                                         {currentUser.role === "Faculty" && renderNavButton("certifications", "🏅", "Certifications")}
                                         {currentUser.role === "Faculty" && renderNavButton("assignments", "📚", "Assignments")}
                                         {renderNavButton("reports", "📄", "Report Generator")}
@@ -320,9 +329,8 @@ function Dashboard({ currentUser, onLogout }) {
                                         {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Administration</p>}
                                         <div className="space-y-1">
                                             {renderNavButton("departments", "🏢", "Departments")}
-                                            {renderNavButton("faculty-mgmt", "👥", "Faculty Roster")}
-                                            {renderNavButton("hod-mgmt", "👑", "HOD Appointments")}
-                                            {renderNavButton("users", "🔑", "Access Control")}
+                                            {renderNavButton("faculty-mgmt", "👥", "All Faculty")}
+                                            {renderNavButton("users", "🎖️", "Designation Assignment")}
                                             {renderNavButton("settings", "⚙️", "College Settings")}
                                         </div>
                                     </div>
@@ -481,181 +489,203 @@ function Dashboard({ currentUser, onLogout }) {
 
                 {/* Main Content Area scroll window */}
                 <main className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {/* OVERVIEW DASHBOARD VIEW */}
-                    {currentTab === "overview" && (
-                        currentUser.role === "HOD" ? (
-                            <HODDashboard currentUser={currentUser} />
-                        ) : (
-                            <AnalyticsPanel 
-                                currentUser={currentUser} 
-                                setCurrentTab={setCurrentTab} 
-                                refreshTrigger={refreshTrigger}
-                            />
-                        )
-                    )}
-
-                    {/* FACULTY DIRECTORY VIEW */}
-                    {currentTab === "faculty" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
-                        <ProfilePanel 
-                            currentUser={currentUser} 
-                            roleFilter={currentUser.role} 
-                            refreshTrigger={refreshTrigger}
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
-
-                    {/* ACADEMIC GREEN BOOK VIEW */}
-                    {currentTab === "greenbook" && (
-                        <GreenBookPanel 
-                            currentUser={currentUser} 
-                            refreshTrigger={refreshTrigger} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
-
-                    {/* WORKSHOPS VIEW */}
-                    {currentTab === "workshops" && (
-                        <WorkshopsPanel 
-                            currentUser={currentUser} 
-                            refreshTrigger={refreshTrigger} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
-
-                    {/* OTHER ACTIVITIES VIEW */}
-                    {currentTab === "activities" && (currentUser.role === "Faculty" || currentUser.role === "HOD") && (
-                        <ActivitiesPanel 
-                            currentUser={currentUser} 
-                            refreshTrigger={refreshTrigger} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
-
-                    {/* RESEARCH PAPERS VIEW */}
-                    {currentTab === "papers" && (
-                        <PapersPanel 
-                            currentUser={currentUser} 
-                            refreshTrigger={refreshTrigger} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
-
-                    {/* KPI TARGETS MANAGEMENT VIEW */}
-                    {currentTab === "kpis" && currentUser.role !== "Faculty" && (
-                        <KPIManagement 
+                    {selectedFacultyProfile ? (
+                        <FacultyDetailedProfile 
+                            facultyId={selectedFacultyProfile._id || selectedFacultyProfile.id || selectedFacultyProfile} 
+                            facultyData={typeof selectedFacultyProfile === "object" ? selectedFacultyProfile : null} 
+                            departmentName={selectedFacultyProfile.department || selectedDepartment?.name || selectedDepartment?.code} 
+                            onBack={() => setSelectedFacultyProfile(null)} 
                             currentUser={currentUser} 
                         />
-                    )}
+                    ) : (
+                        <>
+                            {/* OVERVIEW DASHBOARD VIEW */}
+                            {currentTab === "overview" && (
+                                currentUser.role === "HOD" ? (
+                                    <HODDashboard currentUser={currentUser} onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)} />
+                                ) : selectedDepartment ? (
+                                    <DepartmentFacultyView 
+                                        departmentCode={selectedDepartment.code} 
+                                        departmentName={selectedDepartment.name} 
+                                        onBack={() => setSelectedDepartment(null)} 
+                                        onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)} 
+                                        currentUser={currentUser} 
+                                    />
+                                ) : (
+                                    <AnalyticsPanel 
+                                        currentUser={currentUser} 
+                                        setCurrentTab={setCurrentTab} 
+                                        onSelectDepartment={(code, name) => {
+                                            setSelectedDepartment({ code, name });
+                                            setSelectedFacultyProfile(null);
+                                        }}
+                                        refreshTrigger={refreshTrigger}
+                                    />
+                                )
+                            )}
 
-                    {/* APPROVALS CENTER VIEW */}
-                    {currentTab === "approvals" && (
-                        <ApprovalCenter 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* FACULTY DIRECTORY VIEW */}
+                            {currentTab === "faculty" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
+                                <ProfilePanel 
+                                    currentUser={currentUser} 
+                                    roleFilter={currentUser.role} 
+                                    refreshTrigger={refreshTrigger}
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* FACULTY PERFORMANCE SCOREBOARD VIEW */}
-                    {currentTab === "faculty-performance" && (
-                        <FacultyPerformance 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* ACADEMIC GREEN BOOK VIEW */}
+                            {currentTab === "greenbook" && (
+                                <GreenBookPanel 
+                                    currentUser={currentUser} 
+                                    refreshTrigger={refreshTrigger} 
+                                    onRefresh={triggerRefresh}
+                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
+                                />
+                            )}
 
-                    {/* TASKS VIEW */}
-                    {currentTab === "tasks" && (
-                        <TasksPanel 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* WORKSHOPS VIEW */}
+                            {currentTab === "workshops" && (
+                                <WorkshopsPanel 
+                                    currentUser={currentUser} 
+                                    refreshTrigger={refreshTrigger} 
+                                    onRefresh={triggerRefresh}
+                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
+                                />
+                            )}
 
-                    {/* USER & ACCESS MANAGEMENT VIEW */}
-                    {currentTab === "users" && currentUser.role === "Principal" && (
-                        <UserManagement 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* OTHER ACTIVITIES VIEW */}
+                            {currentTab === "activities" && (currentUser.role === "Faculty" || currentUser.role === "HOD") && (
+                                <ActivitiesPanel 
+                                    currentUser={currentUser} 
+                                    refreshTrigger={refreshTrigger} 
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* DEPARTMENT MANAGEMENT VIEW */}
-                    {currentTab === "departments" && currentUser.role === "Principal" && (
-                        <DepartmentManagement 
-                            currentUser={currentUser} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
+                            {/* RESEARCH PAPERS VIEW */}
+                            {currentTab === "papers" && (
+                                <PapersPanel 
+                                    currentUser={currentUser} 
+                                    refreshTrigger={refreshTrigger} 
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* FACULTY MANAGEMENT VIEW */}
-                    {currentTab === "faculty-mgmt" && currentUser.role === "Principal" && (
-                        <FacultyManagement 
-                            currentUser={currentUser} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
+                            {/* APPROVALS CENTER VIEW */}
+                            {currentTab === "approvals" && (
+                                <ApprovalCenter 
+                                    currentUser={currentUser} 
+                                />
+                            )}
 
-                    {/* HOD MANAGEMENT VIEW */}
-                    {currentTab === "hod-mgmt" && currentUser.role === "Principal" && (
-                        <HODManagement 
-                            currentUser={currentUser} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
+                            {/* FACULTY PERFORMANCE SCOREBOARD VIEW */}
+                            {currentTab === "faculty-performance" && (
+                                <FacultyPerformance 
+                                    currentUser={currentUser} 
+                                />
+                            )}
 
-                    {/* REPORT GENERATOR VIEW */}
-                    {currentTab === "reports" && (
-                        <ReportGeneratorPanel 
-                            currentUser={currentUser} 
-                            refreshTrigger={refreshTrigger} 
-                        />
-                    )}
+                            {/* TASKS VIEW */}
+                            {currentTab === "tasks" && (
+                                <TasksPanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
 
-                    {/* PROFILE VIEW */}
-                    {currentTab === "profile" && (
-                        <ProfilePanel 
-                            currentUser={currentUser} 
-                            roleFilter={currentUser.role === "HOD" ? "Faculty" : currentUser.role} 
-                            refreshTrigger={refreshTrigger}
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
+                            {/* DESIGNATION ASSIGNMENT VIEW */}
+                            {currentTab === "users" && currentUser.role === "Principal" && (
+                                <DesignationAssignment 
+                                    currentUser={currentUser} 
+                                    onRefresh={triggerRefresh}
+                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
+                                />
+                            )}
 
-                    {/* STUDENT MANAGEMENT VIEW */}
-                    {currentTab === "students" && (
-                        <StudentManagement 
-                            currentUser={currentUser} 
-                            onRefresh={triggerRefresh}
-                        />
-                    )}
+                            {/* DEPARTMENT MANAGEMENT VIEW */}
+                            {currentTab === "departments" && currentUser.role === "Principal" && (
+                                <DepartmentManagement 
+                                    currentUser={currentUser} 
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* STUDENT FEEDBACK VIEW */}
-                    {currentTab === "feedback" && (
-                        <StudentFeedback 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* FACULTY MANAGEMENT VIEW */}
+                            {currentTab === "faculty-mgmt" && currentUser.role === "Principal" && (
+                                <FacultyManagement 
+                                    currentUser={currentUser} 
+                                    onRefresh={triggerRefresh}
+                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
+                                />
+                            )}
 
-                    {/* INVITATION & LETTERS VIEW */}
-                    {currentTab === "invitations" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
-                        <InvitationsLetters currentUser={currentUser} />
-                    )}
+                            {/* HOD MANAGEMENT VIEW */}
+                            {currentTab === "hod-mgmt" && currentUser.role === "Principal" && (
+                                <HODManagement 
+                                    currentUser={currentUser} 
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* COLLEGE SETTINGS VIEW */}
-                    {currentTab === "settings" && currentUser.role === "Principal" && (
-                        <OrganizationSettings 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* REPORT GENERATOR VIEW */}
+                            {currentTab === "reports" && (
+                                <ReportGeneratorPanel 
+                                    currentUser={currentUser} 
+                                    refreshTrigger={refreshTrigger} 
+                                />
+                            )}
 
-                    {/* CERTIFICATIONS PORTFOLIO VIEW */}
-                    {currentTab === "certifications" && currentUser.role === "Faculty" && (
-                        <CertificationsPanel 
-                            currentUser={currentUser} 
-                        />
-                    )}
+                            {/* PROFILE VIEW */}
+                            {currentTab === "profile" && (
+                                <ProfilePanel 
+                                    currentUser={currentUser} 
+                                    roleFilter={currentUser.role === "HOD" ? "Faculty" : currentUser.role} 
+                                    refreshTrigger={refreshTrigger}
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
 
-                    {/* SUBJECT ASSIGNMENTS VIEW */}
-                    {currentTab === "assignments" && currentUser.role === "Faculty" && (
-                        <AssignmentsPanel 
-                            currentUser={currentUser} 
-                        />
+                            {/* STUDENT MANAGEMENT VIEW */}
+                            {currentTab === "students" && (
+                                <StudentManagement 
+                                    currentUser={currentUser} 
+                                    onRefresh={triggerRefresh}
+                                />
+                            )}
+
+                            {/* STUDENT FEEDBACK VIEW */}
+                            {currentTab === "feedback" && (
+                                <StudentFeedback 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* INVITATION & LETTERS VIEW */}
+                            {currentTab === "invitations" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
+                                <InvitationsLetters currentUser={currentUser} />
+                            )}
+
+                            {/* COLLEGE SETTINGS VIEW */}
+                            {currentTab === "settings" && currentUser.role === "Principal" && (
+                                <OrganizationSettings 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* CERTIFICATIONS PORTFOLIO VIEW */}
+                            {currentTab === "certifications" && currentUser.role === "Faculty" && (
+                                <CertificationsPanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* SUBJECT ASSIGNMENTS VIEW */}
+                            {currentTab === "assignments" && currentUser.role === "Faculty" && (
+                                <AssignmentsPanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+                        </>
                     )}
                 </main>
             </div>

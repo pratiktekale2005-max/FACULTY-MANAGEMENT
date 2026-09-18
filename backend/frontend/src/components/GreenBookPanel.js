@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 import DivisionManagementCard from "./DivisionManagementCard";
 
-function GreenBookPanel({ currentUser, refreshTrigger, onRefresh }) {
+function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFaculty }) {
     const [subjects, setSubjects] = useState([]);
     const [faculties, setFaculties] = useState([]);
     
@@ -586,21 +586,34 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh }) {
                         const grouped = {};
                         subjects.forEach(sub => {
                             const facName = sub.userId?.name || "Unassigned Faculty";
-                            if (!grouped[facName]) grouped[facName] = [];
-                            grouped[facName].push(sub);
+                            if (!grouped[facName]) grouped[facName] = { faculty: sub.userId, list: [] };
+                            grouped[facName].list.push(sub);
                         });
 
                         return (
                             <div className="space-y-8">
                                 {Object.keys(grouped).map(facName => (
                                     <div key={facName} className="space-y-4">
-                                        <div className="border-b border-slate-800 pb-2">
+                                        <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
                                             <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
-                                                <span>👤</span> Faculty Name: {facName}
+                                                <span>👤</span>
+                                                <span>Faculty:</span>
+                                                {grouped[facName].faculty ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onSelectFaculty && onSelectFaculty(grouped[facName].faculty)}
+                                                        className="text-white hover:text-indigo-300 font-bold underline cursor-pointer"
+                                                        title="Click to view full academic profile"
+                                                    >
+                                                        {facName} ↗
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-slate-300">{facName}</span>
+                                                )}
                                             </h3>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {grouped[facName].map(sub => {
+                                            {grouped[facName].list.map(sub => {
                                                 const lecProgress = sub.lecturesPlanned > 0 ? Math.round((sub.lecturesConducted / sub.lecturesPlanned) * 100) : 0;
                                                 const pracProgress = sub.practicalsPlanned > 0 ? Math.round((sub.practicalsConducted / sub.practicalsPlanned) * 100) : 0;
                                                 return (

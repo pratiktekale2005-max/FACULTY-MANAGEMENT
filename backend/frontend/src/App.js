@@ -1,26 +1,11 @@
 import React, { useState, useEffect } from "react";
 import Login from "./pages/Login";
-import VerifyOTP from "./pages/VerifyOTP";
 import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 
 function App() {
   const [step, setStep] = useState(1);
-  const [email, setEmail] = useState("");
   const [user, setUser] = useState(null);
-
-  // Sync session from cache
-  useEffect(() => {
-    const cachedUser = localStorage.getItem("crm_user");
-    if (cachedUser) {
-      try {
-        setUser(JSON.parse(cachedUser));
-        setStep(3);
-      } catch (err) {
-        localStorage.removeItem("crm_user");
-      }
-    }
-  }, []);
 
   const handleLoginSuccess = (userData, accessToken, refreshToken) => {
     setUser(userData);
@@ -55,14 +40,6 @@ function App() {
       {step === 1 && (
         <Login
           setStep={setStep}
-          setEmail={setEmail}
-        />
-      )}
-
-      {step === 2 && (
-        <VerifyOTP
-          email={email}
-          setStep={setStep}
           onLoginSuccess={handleLoginSuccess}
         />
       )}
@@ -77,7 +54,7 @@ function App() {
       {step === 4 && (
         <Onboarding
           setStep={setStep}
-          setEmail={setEmail}
+          onLoginSuccess={handleLoginSuccess}
         />
       )}
     </div>

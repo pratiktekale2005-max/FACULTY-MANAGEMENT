@@ -3,6 +3,7 @@ const router = express.Router();
 const Workshop = require("../models/Workshop");
 const User = require("../models/User");
 const Approval = require("../models/Approval");
+const { sendInvitationEmail, sendThankingEmail } = require("../services/emailService");
 const { authenticateUser, requireRole } = require("./authMiddleware");
 
 // ================= GET WORKSHOPS =================
@@ -79,10 +80,13 @@ router.post("/", authenticateUser, async (req, res) => {
             speakerContact: speakerContact || "",
             guestDesignation: req.body.guestDesignation || "",
             guestOrganization: req.body.guestOrganization || "",
+            guestEmail: req.body.guestEmail || "",
             workshopType: workshopType || "Arranged by Self",
             speakerResumePath: speakerResumeBase64 || "", // Holds base64 data URL
             photos: photosBase64 || [], // Array of base64 data URLs
             videos: req.body.videosBase64 || [], // Array of base64 video URLs
+            scannedInvitation: req.body.scannedInvitation || "",
+            scannedThankingLetter: req.body.scannedThankingLetter || "",
             studentAttendance: [],
             feedbacks: [],
             status: "pending",
@@ -180,6 +184,9 @@ router.put("/:id", authenticateUser, async (req, res) => {
         workshop.speakerContact = speakerContact || "";
         workshop.guestDesignation = guestDesignation || "";
         workshop.guestOrganization = guestOrganization || "";
+        if (req.body.guestEmail !== undefined) workshop.guestEmail = req.body.guestEmail;
+        if (req.body.scannedInvitation !== undefined) workshop.scannedInvitation = req.body.scannedInvitation;
+        if (req.body.scannedThankingLetter !== undefined) workshop.scannedThankingLetter = req.body.scannedThankingLetter;
         workshop.workshopType = workshopType || "Arranged by Self";
         workshop.status = "pending"; // Reset status on edit
 
@@ -339,10 +346,144 @@ router.put("/:id/feedback", authenticateUser, async (req, res) => {
         });
 
         await workshop.save();
-        res.json({ message: "Workshop feedback assessment logged successfully ✅", workshop });
+        res.json({ message: "Feedback submitted successfully ✅", workshop });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: "Failed to log feedback ❌" });
+        res.status(500).json({ error: "Failed to submit feedback ❌" });
+    }
+});
+
+// ================= SEND INVITATION EMAIL =================
+router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { guestEmail, customHtml, attachmentBase64 } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+        }
+
+        const emailToSend = guestEmail || workshop.guestEmail;
+        if (!emailToSend) {
+            return res.status(400).json({ error: "Guest email is required to send invitation ❌" });
+        }
+
+        // Send Email
+        const result = await sendInvitationEmail({
+            guestEmail: emailToSend,
+            guestName: workshop.speakerName,
+            eventTitle: workshop.title,
+            eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
+            date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
+            time: workshop.time || "",
+            venue: workshop.venue || "Campus Hall",
+            organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
+            deptName: workshop.department || req.user.department,
+            institutionName: "EduCRM Academic Portal",
+            customHtml: customHtml || undefined,
+            attachmentBase64: attachmentBase64 || workshop.scannedInvitation || undefined
+        });
+
+        workshop.guestEmail = emailToSend;
+        workshop.invitationSentAt = new Date();
+        if (attachmentBase64) {
+            workshop.scannedInvitation = attachmentBase64;
+        }
+        await workshop.save();
+
+        res.json({
+            message: "Invitation letter dispatched to guest speaker successfully 📧✅",
+            workshop,
+            result
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message || "Failed to dispatch invitation email ❌" });
+    }
+});
+
+// ================= SEND THANKING EMAIL =================
+router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { guestEmail, customHtml, attachmentBase64 } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+        }
+
+        const emailToSend = guestEmail || workshop.guestEmail;
+        if (!emailToSend) {
+            return res.status(400).json({ error: "Guest email is required to send thanking letter ❌" });
+        }
+
+        // Send Email
+        const result = await sendThankingEmail({
+            guestEmail: emailToSend,
+            guestName: workshop.speakerName,
+            eventTitle: workshop.title,
+            eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
+            date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
+            organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
+            deptName: workshop.department || req.user.department,
+            institutionName: "EduCRM Academic Portal",
+            customHtml: customHtml || undefined,
+            attachmentBase64: attachmentBase64 || workshop.scannedThankingLetter || undefined
+        });
+
+        workshop.guestEmail = emailToSend;
+        workshop.thankingSentAt = new Date();
+        if (attachmentBase64) {
+            workshop.scannedThankingLetter = attachmentBase64;
+        }
+        await workshop.save();
+
+        res.json({
+            message: "Thanking / appreciation letter dispatched to guest speaker successfully 📧✅",
+            workshop,
+            result
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message || "Failed to dispatch thanking email ❌" });
+    }
+});
+
+// ================= SCAN / UPLOAD LETTER =================
+router.put("/:id/scan", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { type, scannedImageBase64 } = req.body; // type: 'invitation' | 'thanking'
+
+    if (!type || !["invitation", "thanking"].includes(type)) {
+        return res.status(400).json({ error: "Letter type ('invitation' or 'thanking') is required ❌" });
+    }
+
+    if (!scannedImageBase64) {
+        return res.status(400).json({ error: "Scanned document data is required ❌" });
+    }
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+        }
+
+        if (type === "invitation") {
+            workshop.scannedInvitation = scannedImageBase64;
+        } else {
+            workshop.scannedThankingLetter = scannedImageBase64;
+        }
+
+        await workshop.save();
+        res.json({
+            message: `Scanned ${type} letter saved successfully ✅`,
+            workshop
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to save scanned letter ❌" });
     }
 });
 

@@ -16,6 +16,14 @@ function UserManagement({ currentUser }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
 
+    // Password Modal state
+    const [passwordModalUser, setPasswordModalUser] = useState(null);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+    const [showPasswordInModal, setShowPasswordInModal] = useState(false);
+    const [passwordError, setPasswordError] = useState("");
+    const [isSavingPassword, setIsSavingPassword] = useState(false);
+
     // CSV Import State
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [csvRows, setCsvRows] = useState([]);
@@ -140,6 +148,43 @@ function UserManagement({ currentUser }) {
             loadData();
         } catch (err) {
             alert(err.message || "Failed to alter account status ❌");
+        }
+    };
+
+    const handleOpenPasswordModal = (user) => {
+        setPasswordModalUser(user);
+        setPasswordInput("");
+        setConfirmPasswordInput("");
+        setPasswordError("");
+        setShowPasswordInModal(false);
+    };
+
+    const handleSavePassword = async (e) => {
+        e.preventDefault();
+        setPasswordError("");
+
+        if (!passwordInput || passwordInput.length < 6) {
+            setPasswordError("Password must be at least 6 characters long ❌");
+            return;
+        }
+
+        if (passwordInput !== confirmPasswordInput) {
+            setPasswordError("Passwords do not match. Please verify both fields ❌");
+            return;
+        }
+
+        try {
+            setIsSavingPassword(true);
+            const res = await api.put(`/users/${passwordModalUser._id}/password`, {
+                password: passwordInput
+            });
+            alert(res.message || `Password successfully updated for ${passwordModalUser.name}! ✅`);
+            setPasswordModalUser(null);
+        } catch (err) {
+            console.error(err);
+            setPasswordError(err.message || "Failed to update user password ❌");
+        } finally {
+            setIsSavingPassword(false);
         }
     };
 
@@ -500,6 +545,13 @@ function UserManagement({ currentUser }) {
                                         <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <button
+                                                    onClick={() => handleOpenPasswordModal(u)}
+                                                    className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-300 font-bold rounded-lg transition-all"
+                                                    title="Set or reset login password"
+                                                >
+                                                    🔑 Password
+                                                </button>
+                                                <button
                                                     onClick={() => handleOpenEditModal(u)}
                                                     className="px-2.5 py-1 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-350 hover:text-slate-200 font-bold rounded-lg transition-all"
                                                 >
@@ -785,6 +837,108 @@ function UserManagement({ currentUser }) {
                                     className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md"
                                 >
                                     {editingUser ? "Save Updates" : "Create Account"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Set / Change Password Modal Dialog */}
+            {passwordModalUser && (
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                                    <span>🔑</span> Set Account Password
+                                </h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Assign or update login credentials for this user
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setPasswordModalUser(null)}
+                                className="text-slate-500 hover:text-slate-300 text-base font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* User Profile Card */}
+                        <div className="bg-slate-950 p-3.5 border border-slate-850 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-200 text-[12px]">{passwordModalUser.name}</span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                    {passwordModalUser.role}
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">{passwordModalUser.email}</div>
+                            <div className="text-[10px] text-slate-500 pt-1">
+                                Department: <strong className="text-slate-300">{passwordModalUser.department || passwordModalUser.departmentId?.name || "—"}</strong>
+                            </div>
+                        </div>
+
+                        {passwordError && (
+                            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-[11px]">
+                                {passwordError}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSavePassword} className="space-y-4">
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                        New Password *
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswordInModal(!showPasswordInModal)}
+                                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold focus:outline-none"
+                                    >
+                                        {showPasswordInModal ? "🙈 Hide" : "👁️ Show"}
+                                    </button>
+                                </div>
+                                <input
+                                    type={showPasswordInModal ? "text" : "password"}
+                                    required
+                                    minLength={6}
+                                    placeholder="Enter new password (min. 6 characters)"
+                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Confirm New Password *
+                                </label>
+                                <input
+                                    type={showPasswordInModal ? "text" : "password"}
+                                    required
+                                    minLength={6}
+                                    placeholder="Confirm new password"
+                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={confirmPasswordInput}
+                                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex gap-3 justify-end border-t border-slate-800 pt-4 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setPasswordModalUser(null)}
+                                    className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-semibold rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingPassword || !passwordInput}
+                                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md disabled:opacity-50"
+                                >
+                                    {isSavingPassword ? "Saving..." : "Save Password"}
                                 </button>
                             </div>
                         </form>

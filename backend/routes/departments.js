@@ -121,9 +121,17 @@ router.put("/:id", requireRole(["Principal"]), async (req, res) => {
     }
 });
 
-// ================= DELETE DEPARTMENT (PRINCIPAL ONLY) =================
-router.delete("/:id", requireRole(["Principal"]), async (req, res) => {
+// ================= DELETE DEPARTMENT (ADMIN/SUPERADMIN ONLY — BLOCKED FOR PRINCIPAL) =================
+router.delete("/:id", requireRole(["Principal", "Admin", "SuperAdmin"]), async (req, res) => {
     const { id } = req.params;
+
+    // Strict requirement: Principal is not permitted to delete departments
+    if (req.user.role === "Principal") {
+        return res.status(403).json({ 
+            error: "Access Denied: Principals are not permitted to delete departments. Please contact a System Administrator. ❌" 
+        });
+    }
+
     try {
         const dept = await Department.findOne({ _id: id, organizationId: req.user.organizationId });
         if (!dept) {
@@ -131,7 +139,6 @@ router.delete("/:id", requireRole(["Principal"]), async (req, res) => {
         }
 
         // Check if any users are currently assigned to this department
-        // We exclude the principal themselves, although typically they belong to 'Administration' (ADM)
         const usersInDept = await User.countDocuments({ departmentId: id });
         if (usersInDept > 0) {
             return res.status(400).json({ error: `Cannot delete department: ${usersInDept} staff member(s) are currently assigned to it. ❌` });

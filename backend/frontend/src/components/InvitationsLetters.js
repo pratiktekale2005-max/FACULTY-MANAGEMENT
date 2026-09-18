@@ -3,19 +3,18 @@ import { api } from "../services/api";
 
 function InvitationsLetters({ currentUser }) {
     const isHOD = currentUser?.role === "HOD";
-    const isPrincipal = currentUser?.role === "Principal";
 
-    // HOD defaults to Faculty Appointment letter; Principal defaults to Invitation
-    const [templateType, setTemplateType] = useState(isHOD ? "faculty_appointment" : "invitation");
+    // Default to Faculty Appointment letter
+    const [templateType, setTemplateType] = useState("faculty_appointment");
     const [usersList, setUsersList] = useState([]);
     const [branding, setBranding] = useState(null);
 
     // Keep template selection restricted if role is HOD
     useEffect(() => {
-        if (isHOD && templateType !== "faculty_appointment" && templateType !== "hod_appointment") {
+        if (templateType !== "faculty_appointment" && templateType !== "hod_appointment") {
             setTemplateType("faculty_appointment");
         }
-    }, [isHOD, templateType]);
+    }, [templateType]);
 
     // Common/Invitation/Thank You form state
     const [form, setForm] = useState({
@@ -215,26 +214,18 @@ function InvitationsLetters({ currentUser }) {
                         {isHOD ? "Department Appointment Letters & Orders" : "Official Institutional Document Generators"}
                     </h2>
                     <p className="text-xs text-slate-400 mt-1">
-                        {isHOD 
-                            ? "Configure, edit, preview, print, and export official appointment letters with PDF download" 
-                            : "Generate official invitation, thank-you, and formal appointment letters with PDF print export"}
+                        Configure, edit, preview, print, and export official appointment letters with PDF download
                     </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <select
-                        className="text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 font-semibold"
+                        className="text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
                         value={templateType}
                         onChange={(e) => setTemplateType(e.target.value)}
                     >
-                        {isPrincipal && (
-                            <>
-                                <option value="invitation">Invitation Letter</option>
-                                <option value="thank_you">Thank You Letter</option>
-                            </>
-                        )}
-                        <option value="faculty_appointment">Faculty Appointment Letter</option>
-                        <option value="hod_appointment">HOD Appointment Letter</option>
+                        <option value="faculty_appointment" className="bg-slate-900 text-slate-200">Faculty Appointment Letter</option>
+                        <option value="hod_appointment" className="bg-slate-900 text-slate-200">HOD Appointment Letter</option>
                     </select>
 
                     <button
@@ -374,9 +365,9 @@ function InvitationsLetters({ currentUser }) {
                                     value={facultyForm.selectedUserId}
                                     onChange={(e) => handleSelectFaculty(e.target.value)}
                                 >
-                                    <option value="">-- Choose Faculty Member --</option>
+                                    <option value="" className="bg-slate-900 text-slate-200">-- Choose Faculty Member --</option>
                                     {usersList.filter(u => u.role === "Faculty" || u.role === "HOD").map(u => (
-                                        <option key={u._id} value={u._id}>
+                                        <option key={u._id} value={u._id} className="bg-slate-900 text-slate-200">
                                             {u.name} ({u.employeeId || "No ID"}) &bull; {u.department || u.departmentId?.name || "Dept"}
                                         </option>
                                     ))}
@@ -522,9 +513,9 @@ function InvitationsLetters({ currentUser }) {
                                     value={hodForm.selectedUserId}
                                     onChange={(e) => handleSelectHod(e.target.value)}
                                 >
-                                    <option value="">-- Choose HOD Candidate --</option>
+                                    <option value="" className="bg-slate-900 text-slate-200">-- Choose HOD Candidate --</option>
                                     {usersList.map(u => (
-                                        <option key={u._id} value={u._id}>
+                                        <option key={u._id} value={u._id} className="bg-slate-900 text-slate-200">
                                             {u.name} ({u.role}) &bull; {u.department || u.departmentId?.name || "Dept"}
                                         </option>
                                     ))}

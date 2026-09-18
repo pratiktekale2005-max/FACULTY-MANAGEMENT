@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 
-function HODDashboard({ currentUser }) {
+function HODDashboard({ currentUser, onSelectFaculty }) {
     const [deptStats, setDeptStats] = useState({
         totalFaculty: 0,
         averagePerformance: 0,
@@ -172,12 +172,12 @@ function HODDashboard({ currentUser }) {
                     </div>
                 </div>
 
-                {/* 5. KPI Achievement */}
+                {/* 5. Student Feedback Rating */}
                 <div className="bg-[#101622] border border-slate-800 p-5 rounded-2xl shadow-md">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">KPI Achievement</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Student Feedback</span>
                     <div className="flex items-baseline gap-2 mt-1">
-                        <span className="text-3xl font-extrabold text-teal-400">{deptStats.kpiAchievement}%</span>
-                        <span className="text-slate-400">Progress</span>
+                        <span className="text-3xl font-extrabold text-teal-400">{deptStats.averageFeedback} ⭐</span>
+                        <span className="text-slate-400">Rating</span>
                     </div>
                 </div>
 
@@ -231,8 +231,18 @@ function HODDashboard({ currentUser }) {
                                 </tr>
                             ) : (
                                 facultyList.map((f) => (
-                                    <tr key={f.facultyId} className="hover:bg-slate-900/40 transition-colors">
-                                        <td className="py-3.5 px-4 font-bold text-slate-250">{f.name}</td>
+                                    <tr key={f.facultyId} className="hover:bg-slate-900/40 transition-colors group">
+                                        <td className="py-3.5 px-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => onSelectFaculty && onSelectFaculty({ _id: f.facultyId, name: f.name })}
+                                                className="font-bold text-slate-200 hover:text-indigo-300 text-left transition flex items-center gap-1.5 cursor-pointer group-hover:underline"
+                                                title={`View academic profile of ${f.name}`}
+                                            >
+                                                <span>{f.name}</span>
+                                                <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
+                                            </button>
+                                        </td>
                                         <td className="py-3.5 px-4">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-slate-300">{f.breakdown?.["Teaching"]?.score || 0}</span>

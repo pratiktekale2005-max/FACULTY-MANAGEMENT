@@ -33,8 +33,7 @@ function DepartmentManagement({ currentUser, onRefresh }) {
     // Form fields state
     const [form, setForm] = useState({
         name: "",
-        code: "",
-        status: "ACTIVE"
+        code: ""
     });
 
     const loadDepartments = async () => {
@@ -60,8 +59,7 @@ function DepartmentManagement({ currentUser, onRefresh }) {
         setEditingDept(null);
         setForm({
             name: "",
-            code: "",
-            status: "ACTIVE"
+            code: ""
         });
         setIsModalOpen(true);
     };
@@ -70,8 +68,7 @@ function DepartmentManagement({ currentUser, onRefresh }) {
         setEditingDept(dept);
         setForm({
             name: dept.name || "",
-            code: dept.code || "",
-            status: dept.status || "ACTIVE"
+            code: dept.code || ""
         });
         setIsModalOpen(true);
     };
@@ -101,35 +98,6 @@ function DepartmentManagement({ currentUser, onRefresh }) {
             if (onRefresh) onRefresh();
         } catch (err) {
             alert(err.message || "Department transaction failed ❌");
-        }
-    };
-
-    const handleToggleStatus = async (dept) => {
-        const nextStatus = dept.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-        const confirmed = window.confirm(`Deactivate/Activate department: Transition ${dept.name} to ${nextStatus}?`);
-        if (!confirmed) return;
-
-        try {
-            await api.put(`/departments/${dept._id}`, { status: nextStatus });
-            setSuccess(`Department status updated to ${nextStatus}! ✅`);
-            loadDepartments();
-            if (onRefresh) onRefresh();
-        } catch (err) {
-            alert(err.message || "Failed to update department status ❌");
-        }
-    };
-
-    const handleDeleteDept = async (dept) => {
-        const confirmed = window.confirm(`CRITICAL: Are you sure you want to permanently delete the department '${dept.name}' (${dept.code})?`);
-        if (!confirmed) return;
-
-        try {
-            await api.delete(`/departments/${dept._id}`);
-            setSuccess("Department successfully deleted from register! ✅");
-            loadDepartments();
-            if (onRefresh) onRefresh();
-        } catch (err) {
-            alert(err.message || "Delete failed: Ensure no users remain assigned to this department ❌");
         }
     };
 
@@ -171,18 +139,17 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                 <th className="py-3 px-4">Dept Code</th>
                                 <th className="py-3 px-4">Department Name</th>
                                 <th className="py-3 px-4">Head of Department (HOD)</th>
-                                <th className="py-3 px-4 text-center">Status</th>
                                 <th className="py-3 px-4 text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-850">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="py-6 text-center text-slate-500 italic">Loading departments registry...</td>
+                                    <td colSpan={4} className="py-6 text-center text-slate-500 italic">Loading departments registry...</td>
                                 </tr>
                             ) : departments.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="py-6 text-center text-slate-500 italic">No academic departments registered.</td>
+                                    <td colSpan={4} className="py-6 text-center text-slate-500 italic">No academic departments registered.</td>
                                 </tr>
                             ) : (
                                 departments.map(d => (
@@ -200,13 +167,6 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                             )}
                                         </td>
                                         <td className="py-3 px-4 text-center">
-                                            <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[9px] font-bold ${
-                                                d.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-455 border border-rose-500/20"
-                                            }`}>
-                                                {d.status || "ACTIVE"}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-4 text-center">
                                             <div className="flex items-center justify-center gap-2">
                                                 <button
                                                     onClick={() => handleOpenDetails(d)}
@@ -220,26 +180,6 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                                 >
                                                     ⚙️ Edit
                                                 </button>
-                                                {d.code !== "ADM" && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleToggleStatus(d)}
-                                                            className={`px-2.5 py-1 font-bold rounded-lg border transition-all ${
-                                                                d.status === "ACTIVE" 
-                                                                    ? "bg-rose-650/10 hover:bg-rose-650/20 border-rose-500/20 text-rose-400" 
-                                                                    : "bg-emerald-650/10 hover:bg-emerald-650/20 border-emerald-500/20 text-emerald-400"
-                                                            }`}
-                                                        >
-                                                            {d.status === "ACTIVE" ? "Deactivate" : "Activate"}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteDept(d)}
-                                                            className="px-2.5 py-1 bg-rose-650/10 hover:bg-rose-650/20 border border-rose-500/20 text-rose-400 font-bold rounded-lg transition-all"
-                                                        >
-                                                            🗑️ Delete
-                                                        </button>
-                                                    </>
-                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -291,18 +231,6 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                 />
                             </div>
 
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Initial Status</label>
-                                <select
-                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-slate-455 focus:outline-none focus:border-indigo-500 transition-colors"
-                                    value={form.status}
-                                    onChange={(e) => setForm(prev => ({ ...prev, status: e.target.value }))}
-                                >
-                                    <option value="ACTIVE">ACTIVE</option>
-                                    <option value="INACTIVE">INACTIVE</option>
-                                </select>
-                            </div>
-
                             <div className="flex gap-3 justify-end border-t border-slate-800 pt-4 mt-6">
                                 <button
                                     type="button"
@@ -342,7 +270,7 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                             </button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 bg-slate-950/60 p-4 border border-slate-850 rounded-xl">
+                        <div className="grid grid-cols-3 gap-4 bg-slate-950/60 p-4 border border-slate-850 rounded-xl">
                             <div>
                                 <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Department Name</p>
                                 <p className="text-xs text-slate-200 font-bold mt-1">{selectedDeptDetails.name}</p>
@@ -357,18 +285,10 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                     {selectedDeptDetails.hodId ? selectedDeptDetails.hodId.name : "Vacant (No leader appointed)"}
                                 </p>
                             </div>
-                            <div>
-                                <p className="text-[10px] text-slate-500 tracking-wider font-bold">Active Registration Status</p>
-                                <span className={`inline-block px-2 py-0.5 mt-1 rounded text-[9px] font-bold ${
-                                    selectedDeptDetails.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-455 border border-rose-500/20"
-                                }`}>
-                                    {selectedDeptDetails.status || "ACTIVE"}
-                                </span>
-                            </div>
                         </div>
 
                         <div className="space-y-2">
-                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Faculty Roster</h4>
+                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Faculty</h4>
                             <div className="border border-slate-850 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
                                 <table className="w-full text-left border-collapse text-[11px]">
                                     <thead>
@@ -377,17 +297,16 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                             <th className="py-2.5 px-3">Name</th>
                                             <th className="py-2.5 px-3">Email</th>
                                             <th className="py-2.5 px-3">Role</th>
-                                            <th className="py-2.5 px-3">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-850/60">
                                         {loadingDetails ? (
                                             <tr>
-                                                <td colSpan={5} className="py-4 text-center text-slate-550 italic">Fetching department roster...</td>
+                                                <td colSpan={4} className="py-4 text-center text-slate-550 italic">Fetching department roster...</td>
                                             </tr>
                                         ) : deptFaculty.length === 0 ? (
                                             <tr>
-                                                <td colSpan={5} className="py-4 text-center text-slate-550 italic">No faculty members registered in this department.</td>
+                                                <td colSpan={4} className="py-4 text-center text-slate-550 italic">No faculty members registered in this department.</td>
                                             </tr>
                                         ) : (
                                             deptFaculty.map(f => (
@@ -396,13 +315,6 @@ function DepartmentManagement({ currentUser, onRefresh }) {
                                                     <td className="py-2 px-3 font-bold text-slate-200">{f.name}</td>
                                                     <td className="py-2 px-3 text-slate-400">{f.email}</td>
                                                     <td className="py-2 px-3 uppercase font-semibold text-indigo-400 text-[10px]">{f.role}</td>
-                                                    <td className="py-2 px-3">
-                                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold ${
-                                                            f.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-455 border border-rose-500/20"
-                                                        }`}>
-                                                            {f.status}
-                                                        </span>
-                                                    </td>
                                                 </tr>
                                             ))
                                         )}
@@ -428,3 +340,4 @@ function DepartmentManagement({ currentUser, onRefresh }) {
 }
 
 export default DepartmentManagement;
+

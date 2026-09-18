@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const bcrypt = require("bcryptjs");
 const Organization = require("../models/Organization");
 const User = require("../models/User");
 const Department = require("../models/Department");
@@ -27,6 +28,7 @@ router.post("/onboard", async (req, res) => {
         collegeCode, 
         principalName, 
         principalEmail, 
+        password,
         phone, 
         address, 
         website, 
@@ -94,11 +96,15 @@ router.post("/onboard", async (req, res) => {
         });
         await adminDept.save();
 
-        // 5. Create Principal user
+        // 5. Create Principal user with hashed password
+        const initialPassword = (password && typeof password === "string" && password.trim()) ? password.trim() : "Password@123";
+        const hashedPassword = await bcrypt.hash(initialPassword, 10);
+
         const principal = new User({
             organizationId: org._id,
             name: principalName.trim(),
             email: cleanEmail,
+            password: hashedPassword,
             role: "Principal",
             department: "Administration",
             departmentId: adminDept._id,

@@ -49,6 +49,7 @@ const divisionTeachingPlanSchema = new mongoose.Schema({
 const studentSchema = new mongoose.Schema({
     rollNo: { type: String, required: true },
     name: { type: String, required: true },
+    gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male" },
     mobileNumber: { type: String, required: true },
     prnNumber: { type: String, required: true },
     skills: { type: String, default: "" },

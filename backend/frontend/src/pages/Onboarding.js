@@ -1,12 +1,13 @@
 import React, { useState } from "react";
 import { api } from "../services/api";
 
-function Onboarding({ setStep, setEmail }) {
+function Onboarding({ setStep }) {
     const [form, setForm] = useState({
         collegeName: "",
         collegeCode: "",
         principalName: "",
         principalEmail: "",
+        password: "",
         phone: "",
         address: "",
         website: "",
@@ -35,23 +36,23 @@ function Onboarding({ setStep, setEmail }) {
         e.preventDefault();
         setError("");
 
-        if (!form.collegeName || !form.collegeCode || !form.principalName || !form.principalEmail) {
-            setError("All mandatory fields * must be filled ❌");
+        if (!form.collegeName || !form.collegeCode || !form.principalName || !form.principalEmail || !form.password) {
+            setError("All mandatory fields * (including password) must be filled ❌");
+            return;
+        }
+
+        if (form.password.length < 6) {
+            setError("Password must be at least 6 characters long ❌");
             return;
         }
 
         setLoading(true);
 
         try {
-            const data = await api.post("/organizations/onboard", form, false);
+            await api.post("/organizations/onboard", form, false);
 
-            alert("Institution successfully created! A verification code has been sent to the Principal's email. 📧");
-            setEmail(form.principalEmail);
-            if (data.devOtp) {
-                sessionStorage.setItem("dev_otp", data.devOtp);
-            }
-            // Go to VerifyOTP step
-            setStep(2);
+            alert("Institution successfully created! You can now log in with your email and password. ✅");
+            setStep(1);
 
         } catch (err) {
             console.error(err);
@@ -201,6 +202,22 @@ function Onboarding({ setStep, setEmail }) {
 
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Contact Phone Number
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    placeholder="e.g. +91 99999 00001"
+                                    value={form.phone}
+                                    onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
+                                    disabled={loading}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                                     Principal Official Email *
                                 </label>
                                 <input
@@ -213,20 +230,21 @@ function Onboarding({ setStep, setEmail }) {
                                     disabled={loading}
                                 />
                             </div>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                Contact Phone Number
-                            </label>
-                            <input
-                                type="text"
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-colors"
-                                placeholder="e.g. +91 99999 00001"
-                                value={form.phone}
-                                onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
-                                disabled={loading}
-                            />
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Administrator Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    required
+                                    minLength={6}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 placeholder-slate-650 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    placeholder="Minimum 6 characters"
+                                    value={form.password}
+                                    onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                                    disabled={loading}
+                                />
+                            </div>
                         </div>
                     </div>
 

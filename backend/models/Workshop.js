@@ -12,14 +12,18 @@ const workshopSchema = new mongoose.Schema({
     speakerBio: { type: String, default: "" },
     speakerOrganization: { type: String, default: "" },
     speakerContact: { type: String, default: "" },
+    guestEmail: { type: String, default: "" },
     guestDesignation: { type: String, default: "" },
     guestOrganization: { type: String, default: "" },
     workshopType: { 
         type: String, 
-        enum: ["Arranged by Self", "Attended", "External"], 
-        default: "Arranged by Self" 
+        default: "Workshop" 
     },
     speakerResumePath: { type: String, default: "" },
+    scannedInvitation: { type: String, default: "" }, // Base64 document / image
+    scannedThankingLetter: { type: String, default: "" }, // Base64 document / image
+    invitationSentAt: { type: Date, default: null },
+    thankingSentAt: { type: Date, default: null },
     photos: [String],
     videos: [String],
     studentAttendance: [String],

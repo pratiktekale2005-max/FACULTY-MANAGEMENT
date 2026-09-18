@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { api } from "../services/api";
 
-function Login({ setStep, setEmail: setParentEmail }) {
+function Login({ setStep, onLoginSuccess }) {
     const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [branding, setBranding] = useState(null);
@@ -32,10 +34,11 @@ function Login({ setStep, setEmail: setParentEmail }) {
         }
     };
 
-    const handleSendOTP = async (e) => {
+    const handleLogin = async (e) => {
         if (e) e.preventDefault();
-        if (!email) {
-            setError("Email address is required ❌");
+        
+        if (!email.trim() || !password) {
+            setError("Both email and password are required ❌");
             return;
         }
 
@@ -43,15 +46,17 @@ function Login({ setStep, setEmail: setParentEmail }) {
         setError("");
 
         try {
-            const data = await api.post("/auth/send-otp", { email: email.trim() }, false);
-            setParentEmail(email.trim());
-            if (data.devOtp) {
-                sessionStorage.setItem("dev_otp", data.devOtp);
+            const data = await api.post("/auth/login", { 
+                email: email.trim(), 
+                password 
+            }, false);
+
+            if (onLoginSuccess) {
+                onLoginSuccess(data.user, data.accessToken, data.refreshToken);
             }
-            setStep(2);
         } catch (err) {
-            console.error(err);
-            setError(err.message || "Cannot connect to server. Ensure Express is running on port 5000 🔌");
+            console.error("Login failed:", err);
+            setError(err.message || "Invalid email or password ❌");
         } finally {
             setLoading(false);
         }
@@ -81,14 +86,15 @@ function Login({ setStep, setEmail: setParentEmail }) {
                     </p>
                 </div>
 
-                <form className="mt-8 space-y-6" onSubmit={handleSendOTP}>
-                    <div className="rounded-md shadow-sm space-y-2">
+                <form className="mt-8 space-y-5" onSubmit={handleLogin}>
+                    <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                             Registered Email Address
                         </label>
                         <input
                             type="email"
                             required
+                            autoComplete="email"
                             className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
                             placeholder="e.g. faculty@gmail.com"
                             value={email}
@@ -97,29 +103,56 @@ function Login({ setStep, setEmail: setParentEmail }) {
                         />
                     </div>
 
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                Account Password
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold focus:outline-none"
+                            >
+                                {showPassword ? "🙈 Hide" : "👁️ Show"}
+                            </button>
+                        </div>
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                required
+                                autoComplete="current-password"
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors pr-10"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
+                            />
+                        </div>
+                    </div>
+
                     {error && (
-                        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-450 p-3.5 rounded-xl text-[11px] leading-relaxed">
+                        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-450 p-3.5 rounded-xl text-[11px] leading-relaxed animate-fade-in">
                             {error}
                         </div>
                     )}
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 pt-2">
                         <button
                             type="submit"
                             disabled={loading}
                             style={{
                                 background: branding ? branding.primaryColor : undefined
                             }}
-                            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-xs font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-lg hover:shadow-indigo-500/20 disabled:opacity-50"
+                            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-xs font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all shadow-lg hover:shadow-indigo-500/20 disabled:opacity-50 cursor-pointer"
                         >
-                            {loading ? "Requesting OTP..." : "Send Verification OTP"}
+                            {loading ? "Signing in..." : "Sign In to Account"}
                         </button>
 
                         <div className="text-center pt-2">
                             <button
                                 type="button"
                                 onClick={() => setStep(4)}
-                                className="text-xs text-slate-400 hover:text-slate-250 transition-colors font-semibold"
+                                className="text-xs text-slate-400 hover:text-slate-200 transition-colors font-semibold"
                             >
                                 Onboard Your Institution →
                             </button>
@@ -128,7 +161,7 @@ function Login({ setStep, setEmail: setParentEmail }) {
                 </form>
 
                 {branding && branding.footer && (
-                    <div className="text-center text-[9px] text-slate-550 border-t border-slate-850/60 pt-4 mt-6">
+                    <div className="text-center text-[9px] text-slate-500 border-t border-slate-850/60 pt-4 mt-6">
                         {branding.footer}
                     </div>
                 )}

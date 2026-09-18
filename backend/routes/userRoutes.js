@@ -1,7 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Department = require("../models/Department");
+const Subject = require("../models/Subject");
 const AuditLog = require("../models/AuditLog");
 const { requireRole } = require("./authMiddleware");
 const { sendWelcomeEmail } = require("../services/emailService");
@@ -50,7 +52,49 @@ router.get("/", requireRole(["Principal", "HOD"]), async (req, res) => {
             .populate("departmentId", "name code")
             .sort({ createdAt: -1 });
 
-        res.json({ users });
+        // Calculate dynamic student metrics per faculty from Subject records
+        const userIds = users.map(u => u._id);
+        const subjects = await Subject.find({
+            organizationId: req.user.organizationId,
+            userId: { $in: userIds }
+        }, "userId students").lean();
+
+        const userStudentsMap = {};
+        subjects.forEach(sub => {
+            const uId = String(sub.userId);
+            if (!userStudentsMap[uId]) {
+                userStudentsMap[uId] = new Map();
+            }
+            (sub.students || []).forEach(st => {
+                const key = st.prnNumber || st.rollNo || String(st._id);
+                if (!userStudentsMap[uId].has(key)) {
+                    userStudentsMap[uId].set(key, st);
+                }
+            });
+        });
+
+        const usersWithStats = users.map(u => {
+            const uObj = u.toJSON ? u.toJSON() : u.toObject();
+            const studentList = userStudentsMap[String(u._id)] ? Array.from(userStudentsMap[String(u._id)].values()) : [];
+            let maleCount = 0;
+            let femaleCount = 0;
+            studentList.forEach(st => {
+                const g = (st.gender || "").toLowerCase();
+                if (g === "female" || g === "f") {
+                    femaleCount++;
+                } else {
+                    maleCount++;
+                }
+            });
+            uObj.studentStats = {
+                total: studentList.length,
+                male: maleCount,
+                female: femaleCount
+            };
+            return uObj;
+        });
+
+        res.json({ users: usersWithStats });
     } catch (err) {
         console.error("Fetch users error:", err);
         res.status(500).json({ error: "Failed to load user accounts database ❌" });
@@ -59,7 +103,7 @@ router.get("/", requireRole(["Principal", "HOD"]), async (req, res) => {
 
 // ================= POST CREATE USER (PRINCIPAL ONLY) =================
 router.post("/", requireRole(["Principal"]), async (req, res) => {
-    const { name, email, employeeId, phone, designation, role, departmentId, status, joiningDate } = req.body;
+    const { name, email, password, employeeId, phone, designation, role, departmentId, status, joiningDate } = req.body;
 
     if (!name || !email || !role || !designation || !departmentId) {
         return res.status(400).json({ error: "Missing required profile attributes ❌" });
@@ -107,11 +151,15 @@ router.post("/", requireRole(["Principal"]), async (req, res) => {
             }
         }
 
-        // 5. Create user
+        // 5. Create user with hashed password
+        const initialPassword = (password && typeof password === "string" && password.trim()) ? password.trim() : "Password@123";
+        const hashedPassword = await bcrypt.hash(initialPassword, 10);
+
         const newUser = new User({
             organizationId: req.user.organizationId,
             name,
             email: emailKey,
+            password: hashedPassword,
             employeeId: employeeId ? employeeId.trim() : undefined,
             phone: phone || "",
             designation,
@@ -266,6 +314,79 @@ router.put("/:id", requireRole(["Principal"]), async (req, res) => {
     }
 });
 
+// ================= PUT ASSIGN DESIGNATION (PRINCIPAL ONLY) =================
+router.put("/:id/designation", requireRole(["Principal"]), async (req, res) => {
+    const { id } = req.params;
+    const { designation } = req.body;
+
+    if (!designation || typeof designation !== "string" || !designation.trim()) {
+        return res.status(400).json({ error: "A valid designation is required ❌" });
+    }
+
+    try {
+        const user = await User.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!user) {
+            return res.status(404).json({ error: "Faculty / user profile not found in your institution ❌" });
+        }
+
+        const oldDesignation = user.designation;
+        user.designation = designation.trim();
+        await user.save();
+
+        // Audit Log
+        const log = new AuditLog({
+            organizationId: req.user.organizationId,
+            userId: req.user._id,
+            action: "ASSIGN_DESIGNATION",
+            description: `Principal assigned designation '${user.designation}' (previously '${oldDesignation || "None"}') to ${user.name}.`
+        });
+        await log.save();
+
+        res.json({ 
+            message: `Designation successfully updated to '${user.designation}' for ${user.name}! ✅`, 
+            user 
+        });
+    } catch (err) {
+        console.error("Assign designation error:", err);
+        res.status(500).json({ error: "Failed to update faculty designation ❌" });
+    }
+});
+
+// ================= PUT ASSIGN / CHANGE PASSWORD (PRINCIPAL ONLY) =================
+router.put("/:id/password", requireRole(["Principal"]), async (req, res) => {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || typeof password !== "string" || password.trim().length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long ❌" });
+    }
+
+    try {
+        const user = await User.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!user) {
+            return res.status(404).json({ error: "User profile not found in your institution ❌" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password.trim(), 10);
+        user.password = hashedPassword;
+        await user.save();
+
+        // Audit Log
+        const log = new AuditLog({
+            organizationId: req.user.organizationId,
+            userId: req.user._id,
+            action: "CHANGE_PASSWORD",
+            description: `Principal updated login credentials for ${user.name} (${user.role}).`
+        });
+        await log.save();
+
+        res.json({ message: `Password successfully updated for ${user.name}! ✅` });
+    } catch (err) {
+        console.error("Assign password error:", err);
+        res.status(500).json({ error: "Failed to update user password ❌" });
+    }
+});
+
 // ================= PUT TOGGLE STATUS (PRINCIPAL ONLY) =================
 router.put("/:id/status", requireRole(["Principal"]), async (req, res) => {
     const { id } = req.params;
@@ -371,10 +492,14 @@ router.post("/bulk-create", requireRole(["Principal"]), async (req, res) => {
                 }
             }
 
+            const rowPassword = (u.password && typeof u.password === "string" && u.password.trim()) ? u.password.trim() : "Password@123";
+            const rowHashedPassword = await bcrypt.hash(rowPassword, 10);
+
             const newUser = new User({
                 organizationId: req.user.organizationId,
                 name,
                 email: emailKey,
+                password: rowHashedPassword,
                 employeeId: employeeId ? employeeId.trim() : undefined,
                 phone: u.phone,
                 designation,
