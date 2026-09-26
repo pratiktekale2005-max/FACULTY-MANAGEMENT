@@ -40,6 +40,116 @@ router.get("/", authenticateUser, async (req, res) => {
     }
 });
 
+// ================= GET DEPARTMENT STUDENTS (FACULTY + HOD COMBINED) =================
+// GET /api/subjects/department-students
+router.get("/department-students", authenticateUser, async (req, res) => {
+    try {
+        const { role, organizationId, department, departmentId } = req.user;
+        let query = { organizationId };
+
+        if (role === "Faculty" || role === "HOD") {
+            // Find all users (Faculty + HOD) in this department
+            let deptUserIds = [];
+            if (departmentId) {
+                deptUserIds = await User.find({ organizationId, departmentId }).distinct("_id");
+            }
+            if (!deptUserIds.length && department) {
+                deptUserIds = await User.find({ organizationId, department }).distinct("_id");
+            }
+            if (!deptUserIds.length) {
+                deptUserIds = [req.user._id];
+            }
+
+            // Also search by department text in Subject
+            query.$or = [
+                { userId: { $in: deptUserIds } },
+                { department: department || req.user.department }
+            ];
+        } else if (role === "Principal" || role === "Admin") {
+            // Principal can view across all departments, or filter by specific department
+            if (req.query.department) {
+                query.department = req.query.department;
+            }
+        }
+
+        const subjects = await Subject.find(query).populate("userId", "name email role department designation");
+
+        // Combine and deduplicate students across all matched subjects
+        const studentMap = new Map();
+
+        for (const subj of subjects) {
+            const addedByName = subj.userId ? `${subj.userId.name} (${subj.userId.role || 'Faculty'})` : "Faculty";
+            const addedByRole = subj.userId?.role || "Faculty";
+            const deptName = subj.department || department || "General";
+
+            for (const st of (subj.students || [])) {
+                // Unique key: PRN or rollNo (case-insensitive) + department
+                const key = (st.prnNumber && st.prnNumber.trim()) 
+                    ? st.prnNumber.trim().toUpperCase() 
+                    : `${st.rollNo.trim().toUpperCase()}_${deptName.toUpperCase()}`;
+
+                if (!studentMap.has(key)) {
+                    studentMap.set(key, {
+                        _id: st._id,
+                        rollNo: st.rollNo,
+                        name: st.name,
+                        gender: st.gender || "Male",
+                        department: st.department || deptName,
+                        year: st.year || subj.academicYear || "SE",
+                        division: st.division || "-",
+                        mobileNumber: st.mobileNumber || "",
+                        prnNumber: st.prnNumber || "",
+                        skills: st.skills || "",
+                        addedBy: st.addedBy || addedByName,
+                        addedByRole: st.addedByRole || addedByRole,
+                        subjectId: subj._id,
+                        subjectName: subj.subjectName,
+                        subjectCode: subj.subjectCode,
+                        allSubjects: [{ id: subj._id, name: subj.subjectName, code: subj.subjectCode }]
+                    });
+                } else {
+                    // Already in map - append subject to list
+                    const existing = studentMap.get(key);
+                    if (!existing.allSubjects.some(s => String(s.id) === String(subj._id))) {
+                        existing.allSubjects.push({ id: subj._id, name: subj.subjectName, code: subj.subjectCode });
+                    }
+                    if ((!existing.division || existing.division === "-") && st.division) {
+                        existing.division = st.division;
+                    }
+                    if (!existing.gender && st.gender) {
+                        existing.gender = st.gender;
+                    }
+                }
+            }
+        }
+
+        const studentsList = Array.from(studentMap.values()).sort((a, b) => {
+            return (a.rollNo || "").localeCompare(b.rollNo || "", undefined, { numeric: true });
+        });
+
+        // Return subjects list for filtering dropdown
+        const availableSubjects = subjects.map(s => ({
+            _id: s._id,
+            subjectName: s.subjectName,
+            subjectCode: s.subjectCode,
+            department: s.department,
+            academicYear: s.academicYear,
+            ownerName: s.userId?.name || "Faculty",
+            ownerRole: s.userId?.role || "Faculty"
+        }));
+
+        res.json({
+            success: true,
+            totalStudents: studentsList.length,
+            students: studentsList,
+            subjects: availableSubjects
+        });
+    } catch (err) {
+        console.error("Get department students error:", err);
+        res.status(500).json({ error: "Failed to fetch department students ❌" });
+    }
+});
+
 // ================= POST ADD SUBJECT =================
 router.post("/", authenticateUser, async (req, res) => {
     const { subjectName, subjectCode, department, academicYear, semester, lecturesPlanned, practicalCode, practicalsPlanned, hasDivision, numberOfDivisions } = req.body;
@@ -185,8 +295,14 @@ router.put("/:id/conduct-class", authenticateUser, async (req, res) => {
                 subject.lectures[index].conductedTopic = conductedTopic || "";
                 subject.lectures[index].status = status;
                 
+                if (req.body.lectureDeliveryStatus) {
+                    subject.lectures[index].lectureDeliveryStatus = req.body.lectureDeliveryStatus;
+                } else {
+                    subject.lectures[index].lectureDeliveryStatus = status === "completed" ? "COMPLETED" : "INCOMPLETE";
+                }
+                
                 // Recalculate conducted count
-                subject.lecturesConducted = subject.lectures.filter(l => l.status === "completed").length;
+                subject.lecturesConducted = subject.lectures.filter(l => l.lectureDeliveryStatus === "COMPLETED" || l.status === "completed").length;
             }
         } else if (type === "practical") {
             const index = subject.practicals.findIndex(p => p._id.toString() === itemId);
@@ -205,6 +321,56 @@ router.put("/:id/conduct-class", authenticateUser, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to update lecture logs ❌" });
+    }
+});
+
+// ================= UPDATE LECTURE DELIVERY STATUS (YES / NO) =================
+// PUT /api/subjects/:id/lectures/:lectureId/delivery-status
+router.put("/:id/lectures/:lectureId/delivery-status", authenticateUser, async (req, res) => {
+    const { id, lectureId } = req.params;
+    const { lectureDeliveryStatus } = req.body; // "COMPLETED" | "INCOMPLETE"
+
+    if (!lectureDeliveryStatus || !["COMPLETED", "INCOMPLETE"].includes(lectureDeliveryStatus)) {
+        return res.status(400).json({ error: "Invalid lecture delivery status. Must be COMPLETED or INCOMPLETE. ❌" });
+    }
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+
+        const index = subject.lectures.findIndex(l => l._id.toString() === lectureId);
+        if (index === -1) {
+            return res.status(404).json({ error: "Lecture not found in subject ❌" });
+        }
+
+        subject.lectures[index].lectureDeliveryStatus = lectureDeliveryStatus;
+        subject.lectures[index].status = lectureDeliveryStatus === "COMPLETED" ? "completed" : "pending";
+
+        if (lectureDeliveryStatus === "COMPLETED") {
+            if (!subject.lectures[index].conductedDate) {
+                subject.lectures[index].conductedDate = new Date().toISOString().split("T")[0];
+            }
+            if (!subject.lectures[index].conductedTopic) {
+                subject.lectures[index].conductedTopic = subject.lectures[index].topic;
+            }
+        } else {
+            subject.lectures[index].conductedDate = "";
+        }
+
+        subject.lecturesConducted = subject.lectures.filter(l => l.lectureDeliveryStatus === "COMPLETED" || l.status === "completed").length;
+        await subject.save();
+
+        res.json({
+            message: `Lecture delivery status marked as ${lectureDeliveryStatus} ✅`,
+            lecture: subject.lectures[index],
+            lecturesConducted: subject.lecturesConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Update lecture delivery status error:", err);
+        res.status(500).json({ error: "Failed to update lecture delivery status ❌" });
     }
 });
 
@@ -279,10 +445,15 @@ router.put("/:id/import-students", authenticateUser, async (req, res) => {
                 subject.students.push({
                     rollNo: s.rollNo,
                     name: s.name,
+                    gender: s.gender || "Male",
                     mobileNumber: s.mobileNumber,
                     prnNumber: s.prnNumber,
                     division: s.division || "",
                     skills: s.skills || "",
+                    year: s.year || subject.academicYear || "SE",
+                    department: subject.department || req.user.department,
+                    addedBy: `${req.user.name || req.user.fullName || 'Faculty'} (${req.user.role})`,
+                    addedByRole: req.user.role,
                     customFields: {}
                 });
             } else {

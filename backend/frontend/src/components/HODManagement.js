@@ -57,13 +57,7 @@ function HODManagement({ currentUser, onRefresh }) {
         setSuccess("");
         const selectedFacultyId = selections[dept._id];
 
-        if (selectedFacultyId) {
-            const faculty = faculties.find(f => f._id === selectedFacultyId);
-            if (faculty && faculty.status !== "ACTIVE") {
-                alert("Cannot assign an inactive user as HOD. HODs must be ACTIVE. ❌");
-                return;
-            }
-        }
+
 
         const confirmed = window.confirm(
             `Assign Leader: Do you want to appoint/replace the Head of Department for '${dept.name}'?`
@@ -136,7 +130,7 @@ function HODManagement({ currentUser, onRefresh }) {
                         .map(dept => {
                             // Filter faculty belonging to this specific department
                              const candidates = faculties.filter(
-                                 f => f.role !== "Principal" && String(f.departmentId?._id || f.departmentId) === String(dept._id) && f.status === "ACTIVE"
+                                 f => f.role !== "Principal" && String(f.departmentId?._id || f.departmentId) === String(dept._id)
                              );
 
                             const currentHOD = faculties.find(

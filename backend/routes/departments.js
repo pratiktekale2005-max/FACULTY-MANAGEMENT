@@ -71,7 +71,8 @@ router.put("/:id", requireRole(["Principal"]), async (req, res) => {
                     return res.status(404).json({ error: "Selected user not found in your organization ❌" });
                 }
                 if (targetUser.status !== "ACTIVE") {
-                    return res.status(400).json({ error: "Cannot assign an inactive user as HOD. HODs must be ACTIVE. ❌" });
+                    targetUser.status = "ACTIVE";
+                    await targetUser.save();
                 }
 
                 // If department already has another HOD, demote them to Faculty

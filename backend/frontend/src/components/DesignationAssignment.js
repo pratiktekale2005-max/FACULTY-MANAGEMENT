@@ -28,15 +28,18 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
     const [search, setSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("");
     const [designationFilter, setDesignationFilter] = useState("");
+    const [roleFilter, setRoleFilter] = useState("");
 
     // Row-specific state for inline editing
     const [selectedDesignations, setSelectedDesignations] = useState({});
+    const [selectedRoles, setSelectedRoles] = useState({});
     const [customInputs, setCustomInputs] = useState({});
     const [savingUserId, setSavingUserId] = useState(null);
 
     // Modal state for focused assignment
     const [modalUser, setModalUser] = useState(null);
     const [modalDesignation, setModalDesignation] = useState("");
+    const [modalRole, setModalRole] = useState("Faculty");
     const [isCustomModal, setIsCustomModal] = useState(false);
     const [isSavingModal, setIsSavingModal] = useState(false);
 
@@ -58,10 +61,13 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
 
             // Initialize inline selection mapping
             const initSelections = {};
+            const initRoles = {};
             allUsers.forEach(u => {
                 initSelections[u._id] = u.designation || "Assistant Professor";
+                initRoles[u._id] = u.role || "Faculty";
             });
             setSelectedDesignations(initSelections);
+            setSelectedRoles(initRoles);
         } catch (err) {
             console.error(err);
             setError(err.message || "Failed to load faculty roster for designation assignment ❌");
@@ -88,16 +94,35 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
         const matchesDesignation = !designationFilter || 
             (u.designation === designationFilter);
 
-        return matchesSearch && matchesDept && matchesDesignation;
+        const matchesRole = !roleFilter || (u.role === roleFilter);
+
+        return matchesSearch && matchesDept && matchesDesignation && matchesRole;
     });
 
     // Metric counts
     const totalFaculty = users.length;
+    const hodCount = users.filter(u => u.role === "HOD").length;
     const assistantCount = users.filter(u => u.designation?.includes("Assistant")).length;
     const associateCount = users.filter(u => u.designation?.includes("Associate")).length;
     const professorCount = users.filter(u => u.designation?.toLowerCase() === "professor" || u.designation?.includes("Professor & HOD")).length;
-    const otherCount = totalFaculty - (assistantCount + associateCount + professorCount);
 
+    // Handle inline role change
+    const handleRoleChangeInline = (userId, newRole) => {
+        setSelectedRoles(prev => ({ ...prev, [userId]: newRole }));
+        
+        const currentDesig = selectedDesignations[userId] || "";
+        if (newRole === "HOD") {
+            if (!currentDesig.toLowerCase().includes("hod") && !currentDesig.toLowerCase().includes("head of")) {
+                setSelectedDesignations(prev => ({ ...prev, [userId]: "Professor & HOD" }));
+            }
+        } else if (newRole === "Faculty") {
+            if (currentDesig === "Professor & HOD" || currentDesig === "Head of the Department") {
+                setSelectedDesignations(prev => ({ ...prev, [userId]: "Professor" }));
+            }
+        }
+    };
+
+    // Handle inline designation select change
     const handleInlineSelectChange = (userId, value) => {
         if (value === "__CUSTOM__") {
             setCustomInputs(prev => ({ ...prev, [userId]: true }));
@@ -105,18 +130,26 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
         } else {
             setCustomInputs(prev => ({ ...prev, [userId]: false }));
             setSelectedDesignations(prev => ({ ...prev, [userId]: value }));
+
+            // If selecting an HOD designation, automatically promote role to HOD
+            if (value === "Professor & HOD" || value === "Head of the Department") {
+                setSelectedRoles(prev => ({ ...prev, [userId]: "HOD" }));
+            }
         }
     };
 
+    // Inline Save
     const handleSaveInline = async (user) => {
         const newDesignation = selectedDesignations[user._id];
+        const newRole = selectedRoles[user._id] || user.role || "Faculty";
+
         if (!newDesignation || !newDesignation.trim()) {
             alert("Please specify a valid designation before saving ❌");
             return;
         }
 
-        if (newDesignation.trim() === user.designation) {
-            alert(`No change: ${user.name} already has designation '${user.designation}' ℹ️`);
+        if (newDesignation.trim() === user.designation && newRole === user.role) {
+            alert(`No change: ${user.name} is already ${user.role} with designation '${user.designation}' ℹ️`);
             return;
         }
 
@@ -125,24 +158,74 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
             setError("");
             setSuccess("");
 
-            const res = await api.put(`/users/${user._id}/designation`, { designation: newDesignation.trim() });
-            setSuccess(res.message || `Successfully assigned '${newDesignation}' to ${user.name}! ✅`);
+            const res = await api.put(`/users/${user._id}/designation`, { 
+                designation: newDesignation.trim(),
+                role: newRole
+            });
+
+            const successMsg = res.message || `Successfully updated ${user.name} to ${newRole} ('${newDesignation.trim()}')! ✅`;
+            setSuccess(successMsg);
             
             // Update local user record
-            setUsers(prev => prev.map(u => u._id === user._id ? { ...u, designation: newDesignation.trim() } : u));
+            const targetDeptId = user.departmentId?._id || user.departmentId;
+            const targetDeptName = user.department;
+
+            setUsers(prev => prev.map(u => {
+                if (u._id === user._id) {
+                    return { 
+                        ...u, 
+                        designation: newDesignation.trim(), 
+                        role: newRole,
+                        ...(res.user || {})
+                    };
+                }
+                // If this user was promoted to HOD, demote previous HOD in the same department
+                if (newRole === "HOD" && u.role === "HOD") {
+                    const sameDept = (targetDeptId && (u.departmentId?._id === targetDeptId || u.departmentId === targetDeptId)) ||
+                                     (targetDeptName && u.department === targetDeptName);
+                    if (sameDept) {
+                        return { 
+                            ...u, 
+                            role: "Faculty",
+                            designation: (u.designation === "Professor & HOD" || u.designation === "Head of the Department") ? "Professor" : u.designation
+                        };
+                    }
+                }
+                return u;
+            }));
+
+            // Sync selectedRoles and customInputs
+            setSelectedRoles(prev => {
+                const next = { ...prev, [user._id]: newRole };
+                if (newRole === "HOD") {
+                    users.forEach(u => {
+                        if (u._id !== user._id && u.role === "HOD") {
+                            const sameDept = (targetDeptId && (u.departmentId?._id === targetDeptId || u.departmentId === targetDeptId)) ||
+                                             (targetDeptName && u.department === targetDeptName);
+                            if (sameDept) {
+                                next[u._id] = "Faculty";
+                            }
+                        }
+                    });
+                }
+                return next;
+            });
+
             setCustomInputs(prev => ({ ...prev, [user._id]: false }));
 
             if (onRefresh) onRefresh();
         } catch (err) {
             console.error(err);
-            setError(err.message || "Failed to update faculty designation ❌");
+            setError(err.message || "Failed to update faculty designation and role ❌");
         } finally {
             setSavingUserId(null);
         }
     };
 
+    // Open detailed modal
     const handleOpenModal = (user) => {
         setModalUser(user);
+        setModalRole(user.role || "Faculty");
         const currentDesig = user.designation || "Assistant Professor";
         if (STANDARD_DESIGNATIONS.includes(currentDesig)) {
             setModalDesignation(currentDesig);
@@ -153,6 +236,7 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
         }
     };
 
+    // Modal Save
     const handleSaveModal = async (e) => {
         e.preventDefault();
         if (!modalUser || !modalDesignation.trim()) {
@@ -165,17 +249,48 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
             setError("");
             setSuccess("");
 
-            const res = await api.put(`/users/${modalUser._id}/designation`, { designation: modalDesignation.trim() });
-            setSuccess(res.message || `Successfully updated designation for ${modalUser.name}! ✅`);
+            const res = await api.put(`/users/${modalUser._id}/designation`, { 
+                designation: modalDesignation.trim(),
+                role: modalRole
+            });
+
+            const successMsg = res.message || `Successfully updated ${modalUser.name} as ${modalRole} ('${modalDesignation.trim()}')! ✅`;
+            setSuccess(successMsg);
             
-            setUsers(prev => prev.map(u => u._id === modalUser._id ? { ...u, designation: modalDesignation.trim() } : u));
+            const targetDeptId = modalUser.departmentId?._id || modalUser.departmentId;
+            const targetDeptName = modalUser.department;
+
+            setUsers(prev => prev.map(u => {
+                if (u._id === modalUser._id) {
+                    return { 
+                        ...u, 
+                        designation: modalDesignation.trim(), 
+                        role: modalRole,
+                        ...(res.user || {})
+                    };
+                }
+                if (modalRole === "HOD" && u.role === "HOD") {
+                    const sameDept = (targetDeptId && (u.departmentId?._id === targetDeptId || u.departmentId === targetDeptId)) ||
+                                     (targetDeptName && u.department === targetDeptName);
+                    if (sameDept) {
+                        return { 
+                            ...u, 
+                            role: "Faculty",
+                            designation: (u.designation === "Professor & HOD" || u.designation === "Head of the Department") ? "Professor" : u.designation
+                        };
+                    }
+                }
+                return u;
+            }));
+
             setSelectedDesignations(prev => ({ ...prev, [modalUser._id]: modalDesignation.trim() }));
+            setSelectedRoles(prev => ({ ...prev, [modalUser._id]: modalRole }));
             
             setModalUser(null);
             if (onRefresh) onRefresh();
         } catch (err) {
             console.error(err);
-            setError(err.message || "Failed to save designation ❌");
+            setError(err.message || "Failed to save designation and role ❌");
         } finally {
             setIsSavingModal(false);
         }
@@ -187,10 +302,10 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
             <div className="bg-[#101622] border border-slate-800 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
                 <div>
                     <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                        <span>🎖️</span> Designation Assignment
+                        <span>🎖️</span> Designation & HOD Role Assignment
                     </h2>
                     <p className="text-slate-400 mt-1 text-[11px]">
-                        Assign, update, and manage official academic and administrative designations across all institutional faculty members
+                        Assign academic designations and appoint Head of the Department (HOD) leaders across all institutional departments
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -211,16 +326,16 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                     <p className="text-lg font-bold text-slate-100 mt-1">{totalFaculty}</p>
                 </div>
                 <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl shadow-md">
+                    <p className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">👑 HODs / Dept Heads</p>
+                    <p className="text-lg font-bold text-sky-300 mt-1">{hodCount}</p>
+                </div>
+                <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl shadow-md">
                     <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Assistant Profs</p>
                     <p className="text-lg font-bold text-indigo-300 mt-1">{assistantCount}</p>
                 </div>
                 <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl shadow-md">
-                    <p className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Associate Profs</p>
-                    <p className="text-lg font-bold text-sky-300 mt-1">{associateCount}</p>
-                </div>
-                <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl shadow-md">
-                    <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Professors & HODs</p>
-                    <p className="text-lg font-bold text-emerald-300 mt-1">{professorCount + otherCount}</p>
+                    <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Associate & Professors</p>
+                    <p className="text-lg font-bold text-emerald-300 mt-1">{associateCount + professorCount}</p>
                 </div>
             </div>
 
@@ -279,6 +394,16 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
 
                     <select
                         className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors"
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                    >
+                        <option value="">All Roles</option>
+                        <option value="Faculty">Faculty Only</option>
+                        <option value="HOD">HODs Only</option>
+                    </select>
+
+                    <select
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-indigo-500 transition-colors"
                         value={designationFilter}
                         onChange={(e) => setDesignationFilter(e.target.value)}
                     >
@@ -289,9 +414,9 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                     </select>
                 </div>
 
-                {(search || deptFilter || designationFilter) && (
+                {(search || deptFilter || roleFilter || designationFilter) && (
                     <button
-                        onClick={() => { setSearch(""); setDeptFilter(""); setDesignationFilter(""); }}
+                        onClick={() => { setSearch(""); setDeptFilter(""); setRoleFilter(""); setDesignationFilter(""); }}
                         className="px-3 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 font-semibold rounded-xl transition-all"
                     >
                         🧹 Clear Filters
@@ -306,7 +431,7 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                         <span>👥</span> Faculty Members ({filteredUsers.length})
                     </h3>
                     <p className="text-[10px] text-slate-500">
-                        Select designation and click <span className="text-indigo-400 font-bold">Save</span> to apply changes
+                        Adjust Role (Faculty / HOD) or Designation, then click <span className="text-indigo-400 font-bold">Save</span>
                     </p>
                 </div>
 
@@ -314,11 +439,11 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                     <table className="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr className="border-b border-slate-800 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                                <th className="py-3 px-4 w-16">Serial No.</th>
+                                <th className="py-3 px-4 w-16 text-center">Serial No.</th>
                                 <th className="py-3 px-4">Employee ID</th>
                                 <th className="py-3 px-4">Faculty Member (Click for Profile)</th>
                                 <th className="py-3 px-4">Department</th>
-                                <th className="py-3 px-4">Role</th>
+                                <th className="py-3 px-4 min-w-[130px]">Role / Position</th>
                                 <th className="py-3 px-4">Current Designation</th>
                                 <th className="py-3 px-4 min-w-[240px]">Assign Designation</th>
                                 <th className="py-3 px-4 text-center">Actions</th>
@@ -341,8 +466,9 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                 filteredUsers.map((u, idx) => {
                                     const currentDesig = u.designation || "Assistant Professor";
                                     const selectedDesig = selectedDesignations[u._id] !== undefined ? selectedDesignations[u._id] : currentDesig;
+                                    const selectedRole = selectedRoles[u._id] !== undefined ? selectedRoles[u._id] : (u.role || "Faculty");
                                     const isCustom = customInputs[u._id];
-                                    const hasChanged = selectedDesig.trim() !== currentDesig;
+                                    const hasChanged = selectedDesig.trim() !== currentDesig || selectedRole !== u.role;
                                     const isSaving = savingUserId === u._id;
 
                                     return (
@@ -359,8 +485,12 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                                     className="font-bold text-slate-200 hover:text-indigo-300 text-left transition flex items-center gap-1.5 cursor-pointer group-hover:underline"
                                                     title={`View complete academic profile of ${u.name}`}
                                                 >
-                                                    <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center text-[10px] font-bold">
-                                                        {u.name ? u.name.charAt(0).toUpperCase() : "👤"}
+                                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                                                        selectedRole === "HOD"
+                                                            ? "bg-sky-500/20 text-sky-300 border-sky-500/30"
+                                                            : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                                                    }`}>
+                                                        {selectedRole === "HOD" ? "👑" : (u.name ? u.name.charAt(0).toUpperCase() : "👤")}
                                                     </span>
                                                     <span>{u.name}</span>
                                                     <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
@@ -368,22 +498,33 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                                 <div className="text-[10px] text-slate-500 mt-0.5">{u.email}</div>
                                             </td>
 
-                                            <td className="py-3.5 px-4 text-slate-350">
+                                            <td className="py-3.5 px-4 text-slate-350 font-medium">
                                                 {u.department || u.departmentId?.name || "—"}
                                             </td>
 
-                                            <td className="py-3.5 px-4 font-bold uppercase">
-                                                <span className={`px-2 py-0.5 rounded text-[9px] ${
-                                                    u.role === "HOD" 
-                                                        ? "bg-sky-500/10 text-sky-400 border border-sky-500/20" 
-                                                        : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                                                }`}>
-                                                    {u.role}
-                                                </span>
+                                            {/* Role Selector (Faculty vs HOD) */}
+                                            <td className="py-3.5 px-4">
+                                                <select
+                                                    value={selectedRole}
+                                                    onChange={(e) => handleRoleChangeInline(u._id, e.target.value)}
+                                                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer focus:outline-none ${
+                                                        selectedRole === "HOD"
+                                                            ? "bg-sky-500/20 border-sky-400/60 text-sky-200 shadow-sm"
+                                                            : "bg-indigo-500/10 border-indigo-500/30 text-indigo-300"
+                                                    }`}
+                                                    title={`Assign ${u.name} as Faculty or Department HOD`}
+                                                >
+                                                    <option value="Faculty" className="bg-slate-900 text-indigo-300">👨‍🏫 Faculty</option>
+                                                    <option value="HOD" className="bg-slate-900 text-sky-300">👑 HOD</option>
+                                                </select>
                                             </td>
 
                                             <td className="py-3.5 px-4">
-                                                <span className="inline-block px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-950 border border-slate-800 text-slate-300">
+                                                <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-semibold border ${
+                                                    u.role === "HOD"
+                                                        ? "bg-sky-950/40 border-sky-800 text-sky-300"
+                                                        : "bg-slate-950 border-slate-800 text-slate-300"
+                                                }`}>
                                                     {currentDesig}
                                                 </span>
                                             </td>
@@ -435,7 +576,7 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                                                 ? "bg-indigo-650 hover:bg-indigo-600 text-white shadow-md shadow-indigo-650/20 cursor-pointer" 
                                                                 : "bg-slate-900/60 border border-slate-850 text-slate-600 cursor-not-allowed"
                                                         }`}
-                                                        title={hasChanged ? "Save updated designation" : "No changes to save"}
+                                                        title={hasChanged ? "Save updated designation & role" : "No changes to save"}
                                                     >
                                                         {isSaving ? "⏳" : "💾 Save"}
                                                     </button>
@@ -460,17 +601,17 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                 </div>
             </div>
 
-            {/* Focused Designation Assignment Modal */}
+            {/* Focused Designation & Role Assignment Modal */}
             {modalUser && (
                 <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
                     <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                                    <span>🎖️</span> Assign Designation
+                                    <span>🎖️</span> Assign Designation & Role
                                 </h3>
                                 <p className="text-[10px] text-slate-400 mt-0.5">
-                                    Configure academic designation for faculty profile
+                                    Configure academic designation and administrative leadership status
                                 </p>
                             </div>
                             <button
@@ -485,10 +626,10 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                         <div className="bg-slate-950 p-3.5 border border-slate-850 rounded-xl space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-slate-200 text-[12px]">{modalUser.name}</span>
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                    modalUser.role === "HOD" ? "bg-sky-500/10 text-sky-400" : "bg-indigo-500/10 text-indigo-400"
+                                <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                    modalRole === "HOD" ? "bg-sky-500/20 text-sky-300 border border-sky-500/30" : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
                                 }`}>
-                                    {modalUser.role}
+                                    {modalRole === "HOD" ? "👑 HOD" : "👨‍🏫 Faculty"}
                                 </span>
                             </div>
                             <div className="text-[10px] text-slate-400">{modalUser.email}</div>
@@ -499,9 +640,67 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                         </div>
 
                         <form onSubmit={handleSaveModal} className="space-y-4">
+                            {/* Role Selection */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                    Select New Designation *
+                                    Role / Administrative Level *
+                                </label>
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setModalRole("Faculty");
+                                            if (modalDesignation === "Professor & HOD" || modalDesignation === "Head of the Department") {
+                                                setModalDesignation("Professor");
+                                            }
+                                        }}
+                                        className={`p-3 rounded-xl border text-left transition-all ${
+                                            modalRole === "Faculty"
+                                                ? "bg-indigo-650/20 border-indigo-500 text-white shadow-sm"
+                                                : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                                        }`}
+                                    >
+                                        <div className="font-bold flex items-center gap-1.5 text-xs">
+                                            <span>👨‍🏫</span> Faculty Member
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5">Regular teaching faculty</div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setModalRole("HOD");
+                                            if (!modalDesignation || modalDesignation === "Assistant Professor" || modalDesignation === "Associate Professor") {
+                                                setModalDesignation("Professor & HOD");
+                                            }
+                                        }}
+                                        className={`p-3 rounded-xl border text-left transition-all ${
+                                            modalRole === "HOD"
+                                                ? "bg-sky-500/20 border-sky-400 text-white shadow-sm"
+                                                : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                                        }`}
+                                    >
+                                        <div className="font-bold flex items-center gap-1.5 text-xs">
+                                            <span>👑</span> Head of Dept (HOD)
+                                        </div>
+                                        <div className="text-[10px] text-sky-400/80 mt-0.5">Department Head leadership</div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {modalRole === "HOD" && (
+                                <div className="bg-sky-500/10 border border-sky-500/25 p-3 rounded-xl text-sky-300 text-[11px] flex items-start gap-2">
+                                    <span className="text-sm shrink-0">👑</span>
+                                    <div>
+                                        <strong>Assigning as Head of Department:</strong> This will appoint <strong>{modalUser.name}</strong> as the official HOD of the <strong>{modalUser.department || modalUser.departmentId?.name || "department"}</strong>, granting full departmental management, approvals queue, and faculty directory visibility.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Designation Field */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Academic / Official Designation *
                                 </label>
                                 
                                 {!isCustomModal ? (
@@ -515,6 +714,9 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                                     setModalDesignation("");
                                                 } else {
                                                     setModalDesignation(e.target.value);
+                                                    if (e.target.value === "Professor & HOD" || e.target.value === "Head of the Department") {
+                                                        setModalRole("HOD");
+                                                    }
                                                 }
                                             }}
                                         >
@@ -538,7 +740,7 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                             type="button"
                                             onClick={() => {
                                                 setIsCustomModal(false);
-                                                setModalDesignation("Assistant Professor");
+                                                setModalDesignation(modalRole === "HOD" ? "Professor & HOD" : "Assistant Professor");
                                             }}
                                             className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold underline"
                                         >
@@ -561,7 +763,7 @@ function DesignationAssignment({ currentUser, onRefresh, onSelectFaculty }) {
                                     disabled={isSavingModal || !modalDesignation.trim()}
                                     className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5"
                                 >
-                                    {isSavingModal ? "Saving..." : "Confirm & Save Designation"}
+                                    {isSavingModal ? "Saving..." : "Confirm & Save Assignment"}
                                 </button>
                             </div>
                         </form>

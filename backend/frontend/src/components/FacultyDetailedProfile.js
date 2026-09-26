@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 
-function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName }) {
+function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName, currentUser, onRefresh }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [profile, setProfile] = useState(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [activities, setActivities] = useState({
         workshops: [],
         papers: [],
@@ -27,6 +29,14 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
         totalFeedbacks: 0
     });
     const [activeTab, setActiveTab] = useState("papers");
+
+    // Password Reset Modal states (Principal Only)
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+    const [showPasswordInModal, setShowPasswordInModal] = useState(false);
+    const [passwordError, setPasswordError] = useState("");
+    const [isSavingPassword, setIsSavingPassword] = useState(false);
 
     const targetId = facultyId || facultyData?._id;
 
@@ -57,6 +67,52 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
 
         fetchFullProfile();
     }, [targetId]);
+
+    const handleConfirmDelete = async () => {
+        if (!profile) return;
+        try {
+            setIsDeleting(true);
+            await api.delete(`/users/${profile._id}`);
+            alert(`Faculty account '${profile.name}' has been successfully deleted! ✅`);
+            setShowDeleteModal(false);
+            if (onRefresh) onRefresh();
+            onBack();
+        } catch (err) {
+            console.error("Delete faculty error:", err);
+            alert(err.message || "Failed to delete faculty account ❌");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleSavePassword = async (e) => {
+        e.preventDefault();
+        setPasswordError("");
+
+        if (!passwordInput || passwordInput.length < 6) {
+            setPasswordError("Password must be at least 6 characters long ❌");
+            return;
+        }
+
+        if (passwordInput !== confirmPasswordInput) {
+            setPasswordError("Passwords do not match. Please verify both fields ❌");
+            return;
+        }
+
+        try {
+            setIsSavingPassword(true);
+            const res = await api.put(`/users/${profile._id}/password`, {
+                password: passwordInput
+            });
+            alert(res.message || `Password successfully updated for ${profile.name}! Credentials dispatched to ${profile.email}. 📧✅`);
+            setShowPasswordModal(false);
+        } catch (err) {
+            console.error("Assign password error:", err);
+            setPasswordError(err.message || "Failed to update user password ❌");
+        } finally {
+            setIsSavingPassword(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -111,9 +167,39 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                     </div>
                 </div>
 
-                <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                    {profile.role || "Faculty Member"}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                        {profile.role || "Faculty Member"}
+                    </span>
+                    {currentUser?.role === "Principal" && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowPasswordModal(true);
+                                setPasswordInput("");
+                                setConfirmPasswordInput("");
+                                setPasswordError("");
+                                setShowPasswordInModal(false);
+                            }}
+                            className="px-3 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            title={`Set or reset login password for ${profile.name}`}
+                        >
+                            <span>🔑</span>
+                            <span>Reset Password</span>
+                        </button>
+                    )}
+                    {currentUser?.role === "Principal" && String(profile._id) !== String(currentUser._id || currentUser.id) && (
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteModal(true)}
+                            className="px-3 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            title={`Delete faculty account for ${profile.name}`}
+                        >
+                            <span>🗑️</span>
+                            <span>Delete Faculty</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Profile Hero Grid */}
@@ -159,12 +245,8 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                         </div>
                         <div className="flex items-center justify-between py-1">
                             <span className="text-slate-500 font-semibold">Account Status:</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                profile.status === "ACTIVE" 
-                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                            }`}>
-                                {profile.status || "ACTIVE"}
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                Active
                             </span>
                         </div>
                     </div>
@@ -575,6 +657,196 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                     )}
                 </div>
             </div>
+
+            {/* Delete Faculty Confirmation Modal (Principal Only) */}
+            {showDeleteModal && profile && (
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2 text-rose-400 font-bold text-sm uppercase tracking-wider">
+                                <span className="text-base">⚠️</span> Confirm Faculty Deletion
+                            </div>
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                className="text-slate-500 hover:text-slate-300 text-base font-bold cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-2 text-slate-300">
+                            <p className="font-semibold text-rose-300">
+                                Are you sure you want to permanently delete this faculty profile?
+                            </p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Use this option if this faculty member has <strong className="text-slate-200">resigned their position</strong> or was <strong className="text-slate-200">removed by institution administration</strong> for any reason. This action is permanent and will completely remove their account and credentials from the institutional roster.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-950 p-3.5 border border-slate-850 rounded-xl space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-200 text-xs">{profile.name}</span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                    {profile.role}
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">{profile.email}</div>
+                            <div className="text-[10px] text-slate-400">
+                                Department: <span className="text-slate-200 font-semibold">{deptDisplayName}</span>
+                            </div>
+                            {profile.employeeId && (
+                                <div className="text-[10px] text-slate-400">
+                                    Employee ID: <span className="font-mono text-slate-200">{profile.employeeId}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 justify-end border-t border-slate-800 pt-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 font-semibold rounded-xl transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isDeleting ? (
+                                    <span>Deleting...</span>
+                                ) : (
+                                    <>
+                                        <span>🗑️</span>
+                                        <span>Yes, Delete Account</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Principal Password Reset Modal */}
+            {showPasswordModal && profile && (
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                                    <span>🔑</span> Set Account Password
+                                </h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Assign or reset login credentials for {profile.name}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowPasswordModal(false)}
+                                className="text-slate-500 hover:text-slate-300 text-base font-bold cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* User Profile Card */}
+                        <div className="bg-slate-950 p-3.5 border border-slate-850 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-200 text-[12px]">{profile.name}</span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                    {profile.role}
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">{profile.email}</div>
+                            <div className="text-[10px] text-slate-500 pt-1">
+                                Department: <strong className="text-slate-300">{deptDisplayName}</strong>
+                            </div>
+                        </div>
+
+                        {/* Email Dispatch Notice */}
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 text-[11px] text-indigo-300 flex items-start gap-2">
+                            <span className="text-base shrink-0">📧</span>
+                            <span>
+                                An automated email containing the <strong>Username ({profile.email})</strong> and new <strong>password</strong> will be immediately dispatched to the faculty member.
+                            </span>
+                        </div>
+
+                        {passwordError && (
+                            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-[11px]">
+                                {passwordError}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSavePassword} className="space-y-4">
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                        New Password *
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswordInModal(!showPasswordInModal)}
+                                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold focus:outline-none"
+                                    >
+                                        {showPasswordInModal ? "🙈 Hide" : "👁️ Show"}
+                                    </button>
+                                </div>
+                                <input
+                                    type={showPasswordInModal ? "text" : "password"}
+                                    required
+                                    minLength={6}
+                                    placeholder="Enter new password (min. 6 characters)"
+                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Confirm New Password *
+                                </label>
+                                <input
+                                    type={showPasswordInModal ? "text" : "password"}
+                                    required
+                                    minLength={6}
+                                    placeholder="Confirm new password"
+                                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3.5 py-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={confirmPasswordInput}
+                                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex gap-3 justify-end border-t border-slate-800 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPasswordModal(false)}
+                                    disabled={isSavingPassword}
+                                    className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 font-semibold rounded-xl transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingPassword}
+                                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    {isSavingPassword ? (
+                                        <span>Saving & Dispatching Email...</span>
+                                    ) : (
+                                        <>
+                                            <span>🔑</span>
+                                            <span>Save & Email Password</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

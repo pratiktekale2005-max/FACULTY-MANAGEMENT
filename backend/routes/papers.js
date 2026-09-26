@@ -18,12 +18,13 @@ router.get("/", authenticateUser, async (req, res) => {
             if (scope === "self" || (requestedTargetId && requestedTargetId.toString() === req.user._id.toString())) {
                 // Return strictly Principal's own self research publications
                 query.submittedBy = req.user._id;
+            } else if (scope === "faculty") {
+                // Return faculty & departmental publications
+                query.submittedBy = { $ne: req.user._id };
             } else if (requestedTargetId && requestedTargetId !== "all") {
                 query.submittedBy = requestedTargetId;
-            } else {
-                // Institutional overview: Show faculty & departmental submissions (exclude Principal self papers)
-                query.submittedBy = { $ne: req.user._id };
             }
+            // By default: Institutional overview includes ALL papers (both Principal self papers and Faculty papers)
         } else if (role === "HOD") {
             if (scope === "self" || (requestedTargetId && requestedTargetId.toString() === req.user._id.toString())) {
                 query.submittedBy = req.user._id;

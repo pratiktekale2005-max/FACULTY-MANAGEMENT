@@ -241,7 +241,7 @@ function DivisionManagementCard({ subject, divisionId, currentUser, onRefresh })
                     <div className="space-y-4">
                         <div className="flex justify-between items-center border-b border-slate-800/60 pb-3">
                             <div>
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Division Enlisted Student Roster</h4>
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Division Enlisted Students</h4>
                                 <p className="text-[10px] text-slate-500 mt-0.5">Assigned count: {divisionStudents.length} student records</p>
                             </div>
                             <button
@@ -268,7 +268,7 @@ function DivisionManagementCard({ subject, divisionId, currentUser, onRefresh })
                                 <tbody className="divide-y divide-slate-850/40 text-slate-350">
                                     {divisionStudents.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="py-8 text-center text-slate-500 italic">No students assigned to Division {divisionId}. Use Student Roster tab to assign divisions.</td>
+                                            <td colSpan={6} className="py-8 text-center text-slate-500 italic">No students assigned to Division {divisionId}. Use Student Details tab to assign divisions.</td>
                                         </tr>
                                     ) : (
                                         divisionStudents.map(s => (

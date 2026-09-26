@@ -150,7 +150,39 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
         else if (nextStatus === "HOD_APPROVED") mappedStatus = "pending"; // Still pending Principal
 
         if (approval.entityType === "WORKSHOP") {
-            await Workshop.findByIdAndUpdate(approval.entityId, { status: mappedStatus });
+            const updateFields = { status: mappedStatus };
+            if (action === "approve") {
+                updateFields.approvedBy = req.user._id;
+                updateFields.approvedByName = req.user.name;
+                updateFields.approvedAt = new Date();
+            }
+            const updatedWorkshop = await Workshop.findByIdAndUpdate(approval.entityId, updateFields, { new: true });
+
+            if (action === "approve" && updatedWorkshop) {
+                try {
+                    const faculty = await User.findById(approval.submittedBy);
+                    const Organization = require("../models/Organization");
+                    const { sendWorkshopApprovalEmail } = require("../services/emailService");
+                    const org = await Organization.findById(req.user.organizationId);
+                    if (faculty && faculty.email) {
+                        sendWorkshopApprovalEmail({
+                            facultyEmail: faculty.email,
+                            facultyName: faculty.name,
+                            workshopTitle: updatedWorkshop.title,
+                            workshopDate: updatedWorkshop.date,
+                            time: updatedWorkshop.time,
+                            venue: updatedWorkshop.venue,
+                            speakerName: updatedWorkshop.speakerName,
+                            hodName: req.user.name,
+                            departmentName: updatedWorkshop.department,
+                            approvalDate: new Date(),
+                            institutionName: org?.name
+                        }).catch(e => console.error("Async approval email error:", e));
+                    }
+                } catch (emailErr) {
+                    console.error("Error dispatching workshop approval email:", emailErr);
+                }
+            }
         } else if (approval.entityType === "PUBLICATION") {
             await Paper.findByIdAndUpdate(approval.entityId, { status: mappedStatus });
         } else if (approval.entityType === "ACTIVITY") {

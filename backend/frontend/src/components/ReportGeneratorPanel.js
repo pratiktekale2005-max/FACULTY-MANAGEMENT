@@ -17,9 +17,11 @@ function ReportGeneratorPanel({ currentUser, refreshTrigger }) {
         if (currentUser.role !== "Principal" && currentUser.role !== "HOD") return;
         try {
             const data = await api.get("/faculty");
-            setFaculties(data.faculties || []);
-            if (data.faculties.length > 0 && !selectedFacultyId) {
-                setSelectedFacultyId(data.faculties[0]._id);
+            const members = data.faculties || [];
+            setFaculties(members);
+            if (members.length > 0 && !selectedFacultyId) {
+                const selfMember = members.find(m => (m._id || m.id) === (currentUser._id || currentUser.id));
+                setSelectedFacultyId(selfMember ? selfMember._id : members[0]._id);
             }
         } catch (err) {
             console.error(err);
@@ -76,12 +78,12 @@ function ReportGeneratorPanel({ currentUser, refreshTrigger }) {
         
         let csv = "data:text/csv;charset=utf-8,";
         csv += "--- FACULTY DOSSIER REPORT SUMMARY ---\n";
-        csv += `Faculty Name,${profile.name}\n`;
+        csv += `Member Name,${profile.name}\n`;
         csv += `Designation,${profile.designation}\n`;
-        csv += `Department,${profile.department}\n`;
+        csv += `Department,${profile.department || "General"}\n`;
         csv += `Email,${profile.email}\n`;
         csv += `Phone,${profile.phone || ""}\n`;
-        csv += `Performance Score,${profile.performanceScore}%\n\n`;
+        csv += `Performance Score,${profile.performanceScore || 0}%\n\n`;
 
         csv += "--- SUBJECTS SYLLABUS TRACKER ---\n";
         csv += "Subject Name,Subject Code,Semester,Lectures Planned,Lectures Conducted,Completion Rate\n";
@@ -131,20 +133,50 @@ function ReportGeneratorPanel({ currentUser, refreshTrigger }) {
             <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 p-5 rounded-2xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4 print:hidden">
                 <div>
                     <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Academic Profile Report Generator</h2>
-                    <p className="text-xs text-slate-400 mt-1">Compile comprehensive profiles, subjects syllabus progress, workshops verification and research preprints.</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                        Compile comprehensive dossiers for any faculty member, department HOD, or Principal / Administration.
+                    </p>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
                     {(currentUser.role === "Principal" || currentUser.role === "HOD") && (
                         <select
-                            className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none"
+                            className="bg-slate-950 border border-slate-800 hover:border-indigo-500 text-xs text-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-indigo-500 font-medium transition cursor-pointer min-w-[280px]"
                             value={selectedFacultyId}
                             onChange={(e) => setSelectedFacultyId(e.target.value)}
                         >
-                            <option value="">-- Choose Faculty --</option>
-                            {faculties.map(f => (
-                                <option key={f._id} value={f._id}>{f.name}</option>
-                            ))}
+                            <option value="">-- Choose Member / Faculty --</option>
+                            
+                            {/* Principal & Administration Group */}
+                            {faculties.some(f => f.role === "Principal") && (
+                                <optgroup label="🏛️ Principal & Administration">
+                                    {faculties.filter(f => f.role === "Principal").map(f => (
+                                        <option key={f._id} value={f._id}>
+                                            {f.name} (Principal &bull; {f.department || "Administration"})
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+
+                            {/* HODs Group */}
+                            {faculties.some(f => f.role === "HOD") && (
+                                <optgroup label="👨‍💼 Department Heads (HODs)">
+                                    {faculties.filter(f => f.role === "HOD").map(f => (
+                                        <option key={f._id} value={f._id}>
+                                            {f.name} (HOD &bull; {f.department || f.departmentId?.name || "Dept"})
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+
+                            {/* Faculty Group */}
+                            <optgroup label="👨‍🏫 Academic Faculty">
+                                {faculties.filter(f => f.role !== "Principal" && f.role !== "HOD").map(f => (
+                                    <option key={f._id} value={f._id}>
+                                        {f.name} ({f.department || f.departmentId?.name || "General"})
+                                    </option>
+                                ))}
+                            </optgroup>
                         </select>
                     )}
 
@@ -277,7 +309,11 @@ function ReportGeneratorPanel({ currentUser, refreshTrigger }) {
                                 <tbody>
                                     {subjects.length === 0 ? (
                                         <tr>
-                                            <td colSpan="6" className="text-center py-4 text-slate-500 italic">No Green Book subjects handbooks registered.</td>
+                                            <td colSpan="6" className="text-center py-4 text-slate-500 italic">
+                                                {profile.role === "Principal" 
+                                                    ? "🏛️ Institutional Governance & Leadership — No classroom teaching subjects assigned."
+                                                    : "No Green Book subjects handbooks registered."}
+                                            </td>
                                         </tr>
                                     ) : (
                                         subjects.map(s => {

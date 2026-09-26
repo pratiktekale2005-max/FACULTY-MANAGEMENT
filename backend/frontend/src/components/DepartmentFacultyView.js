@@ -27,28 +27,46 @@ function DepartmentFacultyView({ departmentCode, departmentName, onBack, onSelec
                 const userData = await api.get("/users");
                 const allUsers = userData.users || [];
 
-                // Filter teaching faculty (Faculty and HOD roles)
-                const teachingStaff = allUsers.filter(u => u.role === "Faculty" || u.role === "HOD");
+                // Filter teaching faculty or administration staff
+                const targetCode = (departmentCode || "").toLowerCase();
+                const targetName = (departmentName || "").toLowerCase();
+                const isAdministration = targetCode === "adm" || targetCode === "administration" || targetName.includes("admin");
+
+                const staffList = allUsers.filter(u => {
+                    if (isAdministration) {
+                        return u.role === "Principal" || u.role === "Faculty" || u.role === "HOD";
+                    }
+                    return u.role === "Faculty" || u.role === "HOD";
+                });
 
                 // Filter by department matching code or name
-                const filtered = teachingStaff.filter(u => {
+                const filtered = staffList.filter(u => {
                     const uDeptName = (u.department || u.departmentId?.name || "").toLowerCase();
                     const uDeptCode = (u.departmentId?.code || "").toLowerCase();
-                    const targetCode = (departmentCode || "").toLowerCase();
 
-                    if (targetCode === "aid") {
+                    if (isAdministration) {
+                        return (
+                            uDeptCode === "adm" ||
+                            uDeptName.includes("admin") ||
+                            u.role === "Principal"
+                        );
+                    }
+
+                    if (targetCode === "aid" || targetCode === "aids" || targetCode === "ai" || targetCode === "322" || targetName.includes("data science")) {
                         return (
                             uDeptCode === "aid" || 
                             uDeptCode === "aids" || 
+                            uDeptCode === "ai" ||
+                            uDeptCode === "322" ||
                             uDeptName.includes("data science") || 
-                            uDeptName === "aid" || 
-                            uDeptName === "aids" ||
+                            uDeptName === "aids" || 
+                            uDeptName === "aid" ||
                             uDeptName.includes("artificial intelligence & data science") ||
                             uDeptName.includes("artificial intelligence and data science")
                         );
                     }
 
-                    if (targetCode === "aiml") {
+                    if (targetCode === "aiml" || targetName.includes("machine learning")) {
                         return (
                             uDeptCode === "aiml" || 
                             uDeptName.includes("machine learning") || 
@@ -58,18 +76,22 @@ function DepartmentFacultyView({ departmentCode, departmentName, onBack, onSelec
                         );
                     }
 
-                    if (targetCode === "cs") {
+                    if (targetCode === "cs" || targetCode === "cse" || targetCode === "321" || targetName.includes("computer science")) {
                         return (
                             uDeptCode === "cs" || 
                             uDeptCode === "cse" || 
+                            uDeptCode === "321" ||
                             uDeptName.includes("computer science") || 
                             uDeptName === "cs" || 
                             uDeptName === "cse"
                         );
                     }
 
-                    // Fallback exact matching
-                    return uDeptCode === targetCode || uDeptName.includes(targetCode);
+                    // Matching for other departments (e.g., Electrical Engineering, etc.)
+                    return (
+                        (uDeptCode && (uDeptCode === targetCode || targetCode.includes(uDeptCode))) ||
+                        (uDeptName && (uDeptName === targetName || uDeptName.includes(targetCode) || targetName.includes(uDeptName)))
+                    );
                 });
 
                 setFacultyList(filtered);
@@ -82,7 +104,7 @@ function DepartmentFacultyView({ departmentCode, departmentName, onBack, onSelec
         };
 
         loadDepartmentFaculty();
-    }, [departmentCode]);
+    }, [departmentCode, departmentName]);
 
     // Client-side search filtering
     const visibleFaculty = facultyList.filter(f => {

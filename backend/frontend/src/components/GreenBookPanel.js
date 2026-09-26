@@ -47,12 +47,6 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
     const [selectedDivision, setSelectedDivision] = useState(null);
 
-    // CO-PO States
-    const [courseObjectives, setCourseObjectives] = useState([]);
-    const [courseOutcomes, setCourseOutcomes] = useState([]);
-    const [coPoMapping, setCoPoMapping] = useState({});
-    const [newObjective, setNewObjective] = useState("");
-    const [newOutcome, setNewOutcome] = useState("");
     const [teachingPlanEditable, setTeachingPlanEditable] = useState([]);
     const [lecturesPlanEditable, setLecturesPlanEditable] = useState([]);
     const [planSubTab, setPlanSubTab] = useState("weekly"); // weekly | lectures
@@ -99,9 +93,6 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
     useEffect(() => {
         if (activeSubject) {
-            setCourseObjectives(activeSubject.courseObjectives || []);
-            setCourseOutcomes(activeSubject.courseOutcomes || []);
-            setCoPoMapping(activeSubject.coPoMapping ? (activeSubject.coPoMapping instanceof Map ? Object.fromEntries(activeSubject.coPoMapping) : activeSubject.coPoMapping) : {});
             setTeachingPlanEditable(activeSubject.teachingPlan || []);
             setLecturesPlanEditable(activeSubject.lectures || []);
         }
@@ -124,20 +115,7 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
         setLecturesPlanEditable(copy);
     };
 
-    const handleSaveCoPo = async () => {
-        try {
-            await api.put(`/subjects/${activeSubject._id}/co-po`, {
-                courseObjectives,
-                courseOutcomes,
-                coPoMapping
-            });
-            alert("CO-PO mapping details saved successfully! ✅");
-            loadSubjects();
-        } catch (err) {
-            console.error(err);
-            alert(err.message || "Failed to save CO-PO mapping.");
-        }
-    };
+
 
     const handleSaveFullTeachingPlan = async () => {
         try {
@@ -224,35 +202,41 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
         }
     };
 
-    // Toggle Lecture completion
-    const toggleLectureConduct = async (itemId, currentStatus) => {
-        if (currentUser.role === "Principal") return; // View-only for Principal
-        
-        const nextStatus = currentStatus === "completed" ? "pending" : "completed";
-        const conductedDate = nextStatus === "completed" ? new Date().toISOString().split("T")[0] : "";
-        
-        let conductedTopic = "";
-        if (nextStatus === "completed") {
-            const input = document.getElementById(`topic-input-${itemId}`);
-            conductedTopic = input ? input.value.trim() : "";
-            if (!conductedTopic) {
-                alert("Entering the covered topic name is required to log class completion! ❌");
-                return;
-            }
-        }
 
+
+    // Update Lecture Delivery Status (YES / NO)
+    const handleLectureDeliveryStatus = async (lectureId, deliveryStatus) => {
         try {
-            await api.put(`/subjects/${activeSubject._id}/conduct-class`, {
-                itemId,
-                type: "lecture",
-                conductedDate,
-                conductedTopic,
-                status: nextStatus
+            // Optimistic local state update
+            if (activeSubject && activeSubject.lectures) {
+                const updatedLectures = activeSubject.lectures.map(l => {
+                    if (String(l._id) === String(lectureId)) {
+                        return {
+                            ...l,
+                            lectureDeliveryStatus: deliveryStatus,
+                            status: deliveryStatus === "COMPLETED" ? "completed" : "pending",
+                            conductedDate: deliveryStatus === "COMPLETED" ? (l.conductedDate || new Date().toISOString().split("T")[0]) : ""
+                        };
+                    }
+                    return l;
+                });
+                setActiveSubject({
+                    ...activeSubject,
+                    lectures: updatedLectures,
+                    lecturesConducted: updatedLectures.filter(l => l.lectureDeliveryStatus === "COMPLETED" || l.status === "completed").length
+                });
+            }
+
+            // Persist to backend database
+            await api.put(`/subjects/${activeSubject._id}/lectures/${lectureId}/delivery-status`, {
+                lectureDeliveryStatus: deliveryStatus
             });
+
+            // Reload subject data to ensure full sync
             loadSubjects();
         } catch (err) {
-            console.error(err);
-            alert(err.message || "Failed to update lecture status.");
+            console.error("Failed to update lecture delivery status:", err);
+            alert(err.message || "Failed to update lecture delivery status ❌");
         }
     };
 
@@ -737,7 +721,7 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                         {/* Tracker Sub-Tabs */}
                         {!activeSubject.hasDivision && (
                             <div className="flex flex-wrap gap-1 bg-slate-950 p-1 border border-slate-850 rounded-xl">
-                                {["lectures", "practicals", "plan", "students", "co-po"].map(tab => {
+                                {["lectures", "practicals", "plan", "students"].map(tab => {
                                     if (tab === "practicals" && activeSubject.practicalsPlanned === 0) return null;
                                     return (
                                         <button
@@ -745,7 +729,7 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                             onClick={() => setDetailTab(tab)}
                                             className={`px-3.5 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all ${detailTab === tab ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"}`}
                                         >
-                                            {tab === "co-po" ? "CO-PO Mapping" : tab}
+                                            {tab}
                                         </button>
                                     );
                                 })}
@@ -801,55 +785,104 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {(activeSubject.lectures || []).map((lec, idx) => (
-                                        <div 
-                                            key={lec._id}
-                                            className={`p-4 rounded-xl border flex flex-col justify-between ${lec.status === "completed" ? "bg-slate-950/20 border-emerald-500/20" : "bg-slate-950/40 border-slate-850"}`}
-                                        >
-                                            <div>
-                                                <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                                                    <span>Lecture {idx + 1}</span>
-                                                    <span className={`px-2 py-0.5 rounded ${lec.status === "completed" ? "bg-emerald-500/10 text-emerald-450 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}>
-                                                        {lec.status}
-                                                    </span>
-                                                </div>
-                                                <span className="text-xs font-bold text-slate-200 leading-snug">
-                                                    {lec.status === "completed" ? lec.conductedTopic : lec.topic}
-                                                </span>
-                                                {lec.status === "completed" && lec.conductedTopic && lec.conductedTopic.trim().toLowerCase() !== lec.topic.trim().toLowerCase() && (
-                                                    <span className="mt-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider w-max">
-                                                        ⚠️ Deviated from plan
-                                                    </span>
-                                                )}
-                                                {lec.status === "completed" && (
-                                                    <p className="text-[9px] text-slate-500 mt-1">Planned Target: {lec.topic}</p>
-                                                )}
-                                                <p className="text-[9px] text-slate-500 mt-2">Planned: {lec.plannedDate}</p>
-                                                {lec.conductedDate && (
-                                                    <p className="text-[9px] text-emerald-400 font-semibold mt-0.5">
-                                                        Conducted: {lec.conductedDate}
-                                                    </p>
-                                                )}
-                                                {currentUser.role === "Faculty" && lec.status !== "completed" && (
-                                                    <input
-                                                        type="text"
-                                                        id={`topic-input-${lec._id}`}
-                                                        placeholder="Which topic did you conduct?"
-                                                        className="w-full text-[10px] bg-slate-900 border border-slate-800 rounded px-2 py-1.5 mt-2 focus:outline-none focus:border-indigo-500 text-slate-200"
-                                                    />
-                                                )}
-                                            </div>
+                                    {(activeSubject.lectures || []).map((lec, idx) => {
+                                        const isCompleted = lec.lectureDeliveryStatus === "COMPLETED" || (!lec.lectureDeliveryStatus && lec.status === "completed");
+                                        const isExplicitIncomplete = lec.lectureDeliveryStatus === "INCOMPLETE";
+                                        const currentDeliveryStatus = isCompleted 
+                                            ? "COMPLETED" 
+                                            : isExplicitIncomplete 
+                                                ? "INCOMPLETE" 
+                                                : "INCOMPLETE / NOT MARKED";
 
-                                            {currentUser.role === "Faculty" && (
-                                                <button
-                                                    onClick={() => toggleLectureConduct(lec._id, lec.status)}
-                                                    className={`mt-4 w-full py-1.5 text-[10px] font-semibold rounded-lg transition-all border ${lec.status === "completed" ? "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/20" : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20"}`}
-                                                >
-                                                    {lec.status === "completed" ? "Mark Uncompleted" : "Log Conducted Class"}
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
+                                        return (
+                                            <div 
+                                                key={lec._id}
+                                                className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                                                    isCompleted 
+                                                        ? "bg-slate-950/20 border-emerald-500/30 shadow-sm shadow-emerald-500/5" 
+                                                        : "bg-slate-950/40 border-slate-850"
+                                                }`}
+                                            >
+                                                <div className="space-y-1.5">
+                                                    <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                                        <span className="font-bold text-slate-300">Lecture {idx + 1}</span>
+                                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                                            isCompleted 
+                                                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                                                : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                                        }`}>
+                                                            {isCompleted ? "COMPLETED" : "PLANNED"}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="text-[10px] text-slate-400">
+                                                        <span className="font-bold text-slate-500">Subject:</span> {activeSubject.subjectName}
+                                                    </div>
+
+                                                    <div>
+                                                        <span className="text-[10px] font-bold text-slate-500 block">Topic:</span>
+                                                        <span className="text-xs font-bold text-slate-100 leading-snug">
+                                                            {isCompleted && lec.conductedTopic ? lec.conductedTopic : lec.topic}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1">
+                                                        <span><strong className="text-slate-500">Date:</strong> {lec.plannedDate}</span>
+                                                        {lec.conductedDate && (
+                                                            <span className="text-emerald-400 font-semibold text-[9px]">Delivered: {lec.conductedDate}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Did you deliver this lecture? Section (YES / NO) */}
+                                                <div className="mt-4 pt-3 border-t border-slate-800/80 space-y-2">
+                                                    <p className="text-[11px] font-bold text-slate-200">
+                                                        Did you deliver this lecture?
+                                                    </p>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleLectureDeliveryStatus(lec._id, "COMPLETED")}
+                                                            className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                                                                isCompleted
+                                                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400"
+                                                                    : "bg-slate-900 text-slate-400 border-slate-750 hover:bg-slate-800 hover:text-slate-200"
+                                                            }`}
+                                                        >
+                                                            <span>{isCompleted ? "✓" : ""}</span>
+                                                            <span>YES</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleLectureDeliveryStatus(lec._id, "INCOMPLETE")}
+                                                            className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 ${
+                                                                isExplicitIncomplete
+                                                                    ? "bg-rose-600 text-white border-rose-500 shadow-md shadow-rose-600/30 ring-1 ring-rose-400"
+                                                                    : "bg-slate-900 text-slate-400 border-slate-750 hover:bg-slate-800 hover:text-slate-200"
+                                                            }`}
+                                                        >
+                                                            <span>{isExplicitIncomplete ? "✕" : ""}</span>
+                                                            <span>NO</span>
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-850/40">
+                                                        <span className="text-slate-400 font-semibold text-[10px]">Status:</span>
+                                                        <span className={`font-black uppercase tracking-wider text-[11px] px-2 py-0.5 rounded ${
+                                                            isCompleted 
+                                                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                                                                : isExplicitIncomplete
+                                                                    ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                                                    : "bg-slate-800/80 text-slate-400 border border-slate-700/60"
+                                                        }`}>
+                                                            {currentDeliveryStatus}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -1166,179 +1199,13 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </div>
                         )}
 
-                        {/* 5. CO-PO MAPPING SUBTAB */}
-                        {detailTab === "co-po" && (
-                            <div className="space-y-6 text-xs text-slate-300">
-                                
-                                {/* Course Objectives and Outcomes sections */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-slate-950/20 border border-slate-850 p-4 rounded-xl space-y-4">
-                                        <h4 className="text-xs font-bold text-slate-200">Course Objectives (COb)</h4>
-                                        <div className="space-y-2">
-                                            {courseObjectives.map((obj, oIdx) => (
-                                                <div key={oIdx} className="flex justify-between items-start gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-850">
-                                                    <span>COb {oIdx + 1}: {obj}</span>
-                                                    {currentUser.role === "Faculty" && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setCourseObjectives(prev => prev.filter((_, idx) => idx !== oIdx))}
-                                                            className="text-rose-455 font-bold"
-                                                        >
-                                                            &times;
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
 
-                                        {currentUser.role === "Faculty" && (
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    className="w-full text-xs text-slate-250 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
-                                                    placeholder="e.g. Understand relational schemas..."
-                                                    value={newObjective}
-                                                    onChange={(e) => setNewObjective(e.target.value)}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (!newObjective.trim()) return;
-                                                        setCourseObjectives(prev => [...prev, newObjective.trim()]);
-                                                        setNewObjective("");
-                                                    }}
-                                                    className="px-3 bg-slate-850 hover:bg-slate-800 border border-slate-700/65 rounded-lg text-slate-250 font-semibold"
-                                                >
-                                                    Add
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="bg-slate-950/20 border border-slate-850 p-4 rounded-xl space-y-4">
-                                        <h4 className="text-xs font-bold text-slate-200">Course Outcomes (CO)</h4>
-                                        <div className="space-y-2">
-                                            {courseOutcomes.map((out, oIdx) => (
-                                                <div key={oIdx} className="flex justify-between items-start gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-850">
-                                                    <span>CO {oIdx + 1}: {out}</span>
-                                                    {currentUser.role === "Faculty" && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setCourseOutcomes(prev => prev.filter((_, idx) => idx !== oIdx))}
-                                                            className="text-rose-455 font-bold"
-                                                        >
-                                                            &times;
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {currentUser.role === "Faculty" && (
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="text"
-                                                    className="w-full text-xs text-slate-250 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
-                                                    placeholder="e.g. Formulate complex SQL queries..."
-                                                    value={newOutcome}
-                                                    onChange={(e) => setNewOutcome(e.target.value)}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (!newOutcome.trim()) return;
-                                                        setCourseOutcomes(prev => [...prev, newOutcome.trim()]);
-                                                        setNewOutcome("");
-                                                    }}
-                                                    className="px-3 bg-slate-855 hover:bg-slate-800 border border-slate-700/65 rounded-lg text-slate-255 font-semibold"
-                                                >
-                                                    Add
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* CO-PO Mapping Grid Matrix */}
-                                <div className="bg-slate-950/20 border border-slate-850 p-5 rounded-2xl space-y-4 overflow-x-auto">
-                                    <div className="flex justify-between items-center min-w-[700px]">
-                                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">CO-PO Mapping Strength Grid</h4>
-                                        <span className="text-[10px] text-slate-500 italic">Click mapping cell to cycle: blank (None) &rarr; 1 (Low) &rarr; 2 (Medium) &rarr; 3 (High)</span>
-                                    </div>
-
-                                    <table className="w-full text-center border-collapse text-xs min-w-[700px]">
-                                        <thead>
-                                            <tr className="border-b border-slate-800 bg-slate-900/40 text-[10px] uppercase font-bold text-slate-500">
-                                                <th className="py-2.5 text-left pl-3">Course Outcomes</th>
-                                                {Array.from({ length: 12 }, (_, idx) => (
-                                                    <th key={idx} className="py-2.5">PO {idx + 1}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-850/50">
-                                            {courseOutcomes.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={13} className="py-6 italic text-slate-500 text-center">Add Course Outcomes above to configure mapping parameters.</td>
-                                                </tr>
-                                            ) : (
-                                                courseOutcomes.map((_, coIdx) => {
-                                                    const coKey = `CO${coIdx + 1}`;
-                                                    return (
-                                                        <tr key={coKey} className="hover:bg-slate-800/10">
-                                                            <td className="py-2 text-left font-bold text-indigo-400 pl-3">{coKey}</td>
-                                                            {Array.from({ length: 12 }, (_, poIdx) => {
-                                                                const poKey = `PO${poIdx + 1}`;
-                                                                const mapKey = `${coKey}_${poKey}`;
-                                                                const val = coPoMapping[mapKey] || "";
-
-                                                                const handleClickCell = () => {
-                                                                    if (currentUser.role !== "Faculty") return;
-                                                                    let nextVal = "";
-                                                                    if (val === "") nextVal = "1";
-                                                                    else if (val === "1") nextVal = "2";
-                                                                    else if (val === "2") nextVal = "3";
-                                                                    else nextVal = "";
-
-                                                                    setCoPoMapping(prev => ({ ...prev, [mapKey]: nextVal }));
-                                                                };
-
-                                                                return (
-                                                                    <td
-                                                                        key={poKey}
-                                                                        onClick={handleClickCell}
-                                                                        className={`py-2 cursor-pointer font-black select-none transition-colors border border-slate-850/40 ${val === "3" ? "bg-indigo-600/20 text-indigo-400" : val === "2" ? "bg-blue-600/10 text-blue-400" : val === "1" ? "bg-slate-800 text-slate-400" : "text-slate-700"}`}
-                                                                    >
-                                                                        {val || "-"}
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                {currentUser.role === "Faculty" && (
-                                    <div className="flex justify-end pt-2 border-t border-slate-800/60">
-                                        <button
-                                            type="button"
-                                            onClick={handleSaveCoPo}
-                                            className="px-5 py-2 font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-all shadow-md"
-                                        >
-                                            Save CO-PO details
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
 
                         {/* 4. STUDENTS SUBTAB */}
                         {detailTab === "students" && (
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between gap-4">
-                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Enrolled Student Roster ({activeSubject.students?.length || 0})</h4>
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Enrolled Students ({activeSubject.students?.length || 0})</h4>
                                     
                                     {currentUser.role === "Faculty" && (
                                         <button

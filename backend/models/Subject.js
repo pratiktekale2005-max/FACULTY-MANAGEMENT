@@ -5,7 +5,8 @@ const lectureSchema = new mongoose.Schema({
     plannedDate: { type: String, required: true },
     conductedDate: { type: String, default: "" },
     conductedTopic: { type: String, default: "" },
-    status: { type: String, enum: ["planned", "completed", "pending"], default: "pending" }
+    status: { type: String, enum: ["planned", "completed", "pending"], default: "pending" },
+    lectureDeliveryStatus: { type: String, enum: ["COMPLETED", "INCOMPLETE", "NOT MARKED"], default: "INCOMPLETE" }
 });
 
 const practicalSchema = new mongoose.Schema({
@@ -64,7 +65,11 @@ const studentSchema = new mongoose.Schema({
         date: { type: String }, // YYYY-MM-DD
         status: { type: String, enum: ["PRESENT", "ABSENT"], default: "PRESENT" }
     }],
-    customFields: { type: Map, of: String, default: {} }
+    customFields: { type: Map, of: String, default: {} },
+    year: { type: String, default: "" },
+    department: { type: String, default: "" },
+    addedBy: { type: String, default: "" },
+    addedByRole: { type: String, default: "" }
 });
 
 const subjectSchema = new mongoose.Schema({

@@ -20,9 +20,14 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
     const [passwordError, setPasswordError] = useState("");
     const [isSavingPassword, setIsSavingPassword] = useState(false);
 
+    // Delete Confirmation Modal state
+    const [deleteModalUser, setDeleteModalUser] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
     // Filters state
     const [search, setSearch] = useState("");
     const [deptFilter, setDeptFilter] = useState("");
+    const [roleFilter, setRoleFilter] = useState("");
 
     // Form fields state
     const [form, setForm] = useState({
@@ -47,10 +52,11 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             const deptData = await api.get("/departments");
             setDepartments(deptData.departments || []);
 
-            // Fetch users (filtered to role=Faculty)
-            const params = { role: "Faculty" };
+            // Fetch all users across all departments (or filtered by role/dept/search)
+            const params = {};
+            if (roleFilter && roleFilter !== "ALL") params.role = roleFilter;
             if (search.trim()) params.search = search.trim();
-            if (deptFilter) params.departmentId = deptFilter;
+            if (deptFilter && deptFilter !== "ALL") params.departmentId = deptFilter;
 
             const userData = await api.get("/users", params);
             setUsers(userData.users || []);
@@ -69,7 +75,7 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
     useEffect(() => {
         loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [search, deptFilter]);
+    }, [search, deptFilter, roleFilter]);
 
     const handleOpenCreateModal = () => {
         setEditingUser(null);
@@ -88,7 +94,6 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
         setIsModalOpen(true);
     };
 
-    // eslint-disable-next-line no-unused-vars
     const handleOpenEditModal = (user) => {
         setEditingUser(user);
         setForm({
@@ -100,7 +105,7 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             designation: user.designation || "Assistant Professor",
             role: user.role || "Faculty",
             departmentId: user.departmentId?._id || user.departmentId || "",
-            status: user.status || "ACTIVE",
+            status: "ACTIVE",
             joiningDate: user.joiningDate || ""
         });
         setIsModalOpen(true);
@@ -134,7 +139,7 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             const res = await api.put(`/users/${passwordModalUser._id}/password`, {
                 password: passwordInput
             });
-            setSuccess(res.message || `Password successfully updated for ${passwordModalUser.name}! ✅`);
+            setSuccess(res.message || `Password successfully updated for ${passwordModalUser.name}! Credentials dispatched to ${passwordModalUser.email}. 📧✅`);
             setPasswordModalUser(null);
         } catch (err) {
             console.error(err);
@@ -172,59 +177,20 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
         }
     };
 
-    // eslint-disable-next-line no-unused-vars
-    const handleToggleStatus = async (user) => {
-        const nextStatus = user.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
-        const confirmed = window.confirm(`Change access permission: Transition status of ${user.name} to ${nextStatus}?`);
-        if (!confirmed) return;
-
+    const handleConfirmDelete = async () => {
+        if (!deleteModalUser) return;
         try {
-            await api.put(`/users/${user._id}/status`, { status: nextStatus });
-            setSuccess(`Faculty status successfully updated to ${nextStatus}! ✅`);
+            setIsDeleting(true);
+            const res = await api.delete(`/users/${deleteModalUser._id}`);
+            setSuccess(res.message || `Faculty account for '${deleteModalUser.name}' was permanently deleted! ✅`);
+            setDeleteModalUser(null);
             loadData();
             if (onRefresh) onRefresh();
         } catch (err) {
-            alert(err.message || "Failed to alter status ❌");
-        }
-    };
-
-    // eslint-disable-next-line no-unused-vars
-    const handleDeleteUser = async (user) => {
-        const confirmed = window.confirm(`CRITICAL WARNING: Are you sure you want to permanently delete the faculty profile for '${user.name}'? This action is irreversible.`);
-        if (!confirmed) return;
-
-        try {
-            await api.delete(`/users/${user._id}`);
-            setSuccess("Faculty account successfully deleted from system! ✅");
-            loadData();
-            if (onRefresh) onRefresh();
-        } catch (err) {
+            console.error("Delete user error:", err);
             alert(err.message || "Failed to delete user profile ❌");
-        }
-    };
-
-    // eslint-disable-next-line no-unused-vars
-    const handleAssignHOD = async (user) => {
-        if (user.status !== "ACTIVE") {
-            alert("Cannot assign an inactive user as HOD. HODs must be ACTIVE. ❌");
-            return;
-        }
-
-        const confirmed = window.confirm(`Appoint HOD: Are you sure you want to appoint ${user.name} as HOD? This will automatically update department leadership and demote any existing HOD.`);
-        if (!confirmed) return;
-
-        try {
-            const deptId = user.departmentId?._id || user.departmentId;
-            if (!deptId) {
-                alert("Faculty is not mapped to any department! ❌");
-                return;
-            }
-            await api.put(`/departments/${deptId}`, { hodId: user._id });
-            setSuccess(`${user.name} appointed as Head of Department successfully! ✅`);
-            loadData();
-            if (onRefresh) onRefresh();
-        } catch (err) {
-            alert(err.message || "Failed to assign HOD ❌");
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -233,8 +199,10 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             {/* Header dashboard info */}
             <div className="bg-[#101622] border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-lg">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Faculty Management</h2>
-                    <p className="text-slate-400 mt-1">Enroll faculty members, edit details, set login passwords, and manage institutional credentials</p>
+                    <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Faculty & Staff Management</h2>
+                    <p className="text-slate-400 mt-1">
+                        All registered members across all departments ({users.length} Total Members). Enroll staff, edit profiles, and set credentials.
+                    </p>
                 </div>
                 <button
                     onClick={handleOpenCreateModal}
@@ -257,7 +225,7 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             )}
 
             {/* Filters */}
-            <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl flex items-center gap-3">
+            <div className="bg-[#101622] border border-slate-800 p-4 rounded-xl flex flex-wrap items-center gap-3">
                 <input
                     type="text"
                     placeholder="Search by name, email, employee id..."
@@ -270,13 +238,23 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                     value={deptFilter}
                     onChange={(e) => setDeptFilter(e.target.value)}
                 >
-                    <option value="" className="bg-slate-900 text-slate-200">All Departments</option>
+                    <option value="" className="bg-slate-900 text-slate-200">🌐 All Departments</option>
                     {departments.map(d => (
                         <option key={d._id} value={d._id} className="bg-slate-900 text-slate-200">{d.name}</option>
                     ))}
                 </select>
+                <select
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer font-medium"
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                >
+                    <option value="" className="bg-slate-900 text-slate-200">👥 All Roles (Faculty, HOD, Principal)</option>
+                    <option value="Faculty" className="bg-slate-900 text-slate-200">👨‍🏫 Faculty Only</option>
+                    <option value="HOD" className="bg-slate-900 text-slate-200">👨‍💼 Head of Department (HOD)</option>
+                    <option value="Principal" className="bg-slate-900 text-slate-200">🏛️ Principal / Administration</option>
+                </select>
                 <button
-                    onClick={() => { setSearch(""); setDeptFilter(""); }}
+                    onClick={() => { setSearch(""); setDeptFilter(""); setRoleFilter(""); }}
                     className="px-3.5 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 font-semibold rounded-xl transition-all"
                 >
                     🧹 Clear
@@ -285,15 +263,20 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
 
             {/* All Faculty Table */}
             <div className="bg-[#101622] border border-slate-800 rounded-2xl p-5 shadow-lg">
-                <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider mb-4">All Faculty</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Institution Members Roster</h3>
+                    <span className="text-[11px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
+                        Showing {users.length} Active Staff & Faculty
+                    </span>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse text-xs">
                         <thead>
                             <tr className="border-b border-slate-800 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                                 <th className="py-3 px-4">Employee ID</th>
-                                <th className="py-3 px-4">Faculty Name</th>
+                                <th className="py-3 px-4">Member Name</th>
                                 <th className="py-3 px-4">Department</th>
-                                <th className="py-3 px-4">Designation</th>
+                                <th className="py-3 px-4">Role & Designation</th>
                                 <th className="py-3 px-4">Mobile No.</th>
                                 <th className="py-3 px-4">Students</th>
                                 <th className="py-3 px-4 text-center">Actions</th>
@@ -326,8 +309,21 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                                                 <span className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">↗</span>
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 text-slate-300">{u.department || u.departmentId?.name || "—"}</td>
-                                        <td className="py-3 px-4 text-slate-400 font-medium">{u.designation || "—"}</td>
+                                        <td className="py-3 px-4 text-slate-300">
+                                            {u.department || u.departmentId?.name || (u.role === "Principal" ? "Administration" : "—")}
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="text-slate-200 font-medium">{u.designation || "—"}</span>
+                                                <span className={`inline-block px-1.5 py-0.5 w-fit rounded text-[9px] font-bold uppercase tracking-wide ${
+                                                    u.role === "Principal" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" :
+                                                    u.role === "HOD" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+                                                    "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                                                }`}>
+                                                    {u.role === "Principal" ? "🏛️ Principal" : u.role === "HOD" ? "👨‍💼 HOD" : "👨‍🏫 Faculty"}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td className="py-3 px-4 font-mono text-indigo-400 font-semibold">{u.phone || "—"}</td>
                                         <td className="py-3 px-4">
                                             <div className="flex flex-col gap-0.5 text-[11px] leading-tight">
@@ -348,11 +344,21 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                                                 </button>
                                                 <button
                                                     onClick={() => handleOpenEditModal(u)}
-                                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold border border-slate-700 transition-all"
+                                                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold border border-slate-700 transition-all cursor-pointer"
                                                     title="Edit Faculty Details"
                                                 >
                                                     ✏️ Edit
                                                 </button>
+                                                {currentUser?.role === "Principal" && String(u._id) !== String(currentUser._id || currentUser.id) && (
+                                                    <button
+                                                        onClick={() => setDeleteModalUser(u)}
+                                                        className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-bold border border-rose-500/20 transition-all flex items-center gap-1 cursor-pointer"
+                                                        title={`Delete faculty profile for ${u.name}`}
+                                                    >
+                                                        <span>🗑️</span>
+                                                        <span>Delete</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -396,6 +402,14 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                             <div className="text-[10px] text-slate-500 pt-1">
                                 Department: <strong className="text-slate-300">{passwordModalUser.department || passwordModalUser.departmentId?.name || "—"}</strong>
                             </div>
+                        </div>
+
+                        {/* Email Dispatch Notice */}
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 text-[11px] text-indigo-300 flex items-start gap-2">
+                            <span className="text-base shrink-0">📧</span>
+                            <span>
+                                An automated notification with the <strong>Username ({passwordModalUser.email})</strong> and newly assigned <strong>password</strong> will be immediately dispatched to the user's email address.
+                            </span>
                         </div>
 
                         {passwordError && (
@@ -448,16 +462,23 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                                 <button
                                     type="button"
                                     onClick={() => setPasswordModalUser(null)}
-                                    className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-semibold rounded-xl transition-all"
+                                    className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-semibold rounded-xl transition-all cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isSavingPassword || !passwordInput}
-                                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md disabled:opacity-50"
+                                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    {isSavingPassword ? "Saving..." : "Save Password"}
+                                    {isSavingPassword ? (
+                                        <span>Saving & Dispatching Email...</span>
+                                    ) : (
+                                        <>
+                                            <span>🔑</span>
+                                            <span>Set & Email Password</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>
@@ -543,6 +564,9 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                                         value={form.password}
                                         onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
                                     />
+                                    <p className="text-[9px] text-indigo-400 mt-1">
+                                        📧 Credentials (Username as email & password) will be sent automatically via email.
+                                    </p>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Designation *</label>
@@ -597,6 +621,78 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Direct Delete Faculty Confirmation Modal (Principal Only) */}
+            {deleteModalUser && (
+                <div className="fixed inset-0 bg-slate-950/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2 text-rose-400 font-bold text-sm uppercase tracking-wider">
+                                <span className="text-base">⚠️</span> Confirm Faculty Deletion
+                            </div>
+                            <button
+                                onClick={() => setDeleteModalUser(null)}
+                                className="text-slate-500 hover:text-slate-300 text-base font-bold cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-2 text-slate-300">
+                            <p className="font-semibold text-rose-300">
+                                Are you sure you want to permanently delete this faculty account?
+                            </p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                                Use this option if this faculty member has <strong className="text-slate-200">resigned their position</strong> or was <strong className="text-slate-200">removed by institution administration</strong> for any reason. This will permanently remove their credentials and profile from the institutional roster.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-950 p-3.5 border border-slate-850 rounded-xl space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-slate-200 text-xs">{deleteModalUser.name}</span>
+                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                    {deleteModalUser.role}
+                                </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">{deleteModalUser.email}</div>
+                            <div className="text-[10px] text-slate-400">
+                                Department: <span className="text-slate-200 font-semibold">{deleteModalUser.department || deleteModalUser.departmentId?.name || "—"}</span>
+                            </div>
+                            {deleteModalUser.employeeId && (
+                                <div className="text-[10px] text-slate-400">
+                                    Employee ID: <span className="font-mono text-slate-200">{deleteModalUser.employeeId}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 justify-end border-t border-slate-800 pt-4">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteModalUser(null)}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 font-semibold rounded-xl transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer"
+                            >
+                                {isDeleting ? (
+                                    <span>Deleting...</span>
+                                ) : (
+                                    <>
+                                        <span>🗑️</span>
+                                        <span>Yes, Delete Account</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

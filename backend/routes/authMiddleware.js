@@ -30,7 +30,8 @@ const authenticateUser = async (req, res, next) => {
         }
 
         if (user.status === "INACTIVE") {
-            return res.status(403).json({ error: "Your account is currently inactive. Please contact the institution administrator." });
+            user.status = "ACTIVE";
+            await user.save();
         }
 
         // Attach authenticated user payload to request

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import GreenBookPanel from "../components/GreenBookPanel";
-import ProfilePanel from "../components/ProfilePanel";
 import WorkshopsPanel from "../components/WorkshopsPanel";
 import ActivitiesPanel from "../components/ActivitiesPanel";
 import PapersPanel from "../components/PapersPanel";
@@ -22,6 +21,8 @@ import CertificationsPanel from "../components/CertificationsPanel";
 import AssignmentsPanel from "../components/AssignmentsPanel";
 import DepartmentFacultyView from "../components/DepartmentFacultyView";
 import FacultyDetailedProfile from "../components/FacultyDetailedProfile";
+import FacultyDirectory from "../components/FacultyDirectory";
+import MyProfileView from "../components/MyProfileView";
 import { api } from "../services/api";
 
 function Dashboard({ currentUser, onLogout }) {
@@ -138,7 +139,7 @@ function Dashboard({ currentUser, onLogout }) {
             case "kpis": return "KPI Goals & Targets Tracker";
             case "reports": return "Academic Profile Report Generator";
             case "profile": return "My Academic Profile";
-            case "students": return "Student Roster Management";
+            case "students": return "Student Details";
             case "feedback": return "Student Course Evaluations";
             case "invitations": return currentUser.role === "HOD" ? "Department Appointment Letters" : "Official Letters & Templates";
             case "users": return "Designation Assignment";
@@ -307,9 +308,9 @@ function Dashboard({ currentUser, onLogout }) {
                                         {renderNavButton("workshops", "🎤", currentUser.role === "Principal" ? "Workshop Approvals" : "Workshops & Seminars")}
                                         {renderNavButton("approvals", "🔔", currentUser.role === "Principal" ? "Approvals Queue" : "My Submissions")}
                                         {currentUser.role === "Faculty" && renderNavButton("activities", "🎯", "Other Activities")}
-                                        {renderNavButton("students", "👥", "Student Roster")}
+                                        {renderNavButton("students", "👥", "Student Details")}
                                         {renderNavButton("feedback", "⭐", "Survey Feedbacks")}
-                                        {currentUser.role === "Principal" && renderNavButton("invitations", "✉️", "Official Letters")}
+                                        {(currentUser.role === "Principal" || currentUser.role === "HOD") && renderNavButton("invitations", "✉️", "Official Letters")}
                                     </div>
                                 </div>
 
@@ -496,6 +497,7 @@ function Dashboard({ currentUser, onLogout }) {
                             departmentName={selectedFacultyProfile.department || selectedDepartment?.name || selectedDepartment?.code} 
                             onBack={() => setSelectedFacultyProfile(null)} 
                             currentUser={currentUser} 
+                            onRefresh={triggerRefresh} 
                         />
                     ) : (
                         <>
@@ -526,9 +528,9 @@ function Dashboard({ currentUser, onLogout }) {
 
                             {/* FACULTY DIRECTORY VIEW */}
                             {currentTab === "faculty" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
-                                <ProfilePanel 
+                                <FacultyDirectory 
                                     currentUser={currentUser} 
-                                    roleFilter={currentUser.role} 
+                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
                                     refreshTrigger={refreshTrigger}
                                     onRefresh={triggerRefresh}
                                 />
@@ -637,10 +639,8 @@ function Dashboard({ currentUser, onLogout }) {
 
                             {/* PROFILE VIEW */}
                             {currentTab === "profile" && (
-                                <ProfilePanel 
+                                <MyProfileView 
                                     currentUser={currentUser} 
-                                    roleFilter={currentUser.role === "HOD" ? "Faculty" : currentUser.role} 
-                                    refreshTrigger={refreshTrigger}
                                     onRefresh={triggerRefresh}
                                 />
                             )}

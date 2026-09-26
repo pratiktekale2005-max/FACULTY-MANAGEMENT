@@ -3,6 +3,7 @@ import { api } from "../services/api";
 
 export default function WorkshopLetterModal({
     workshop,
+    workshopsList = [],
     initialType = "invitation", // "invitation" | "thanking"
     initialStep = "generate", // "generate" | "view" | "scan" | "send"
     currentUser,
@@ -11,37 +12,67 @@ export default function WorkshopLetterModal({
 }) {
     const [letterType, setLetterType] = useState(initialType);
     const [activeStep, setActiveStep] = useState(initialStep);
-    
-    // Letter Fields
-    const [institutionName, setInstitutionName] = useState("EduCRM Academic Institution of Technology");
-    const [departmentName, setDepartmentName] = useState(workshop.department || currentUser?.department || "Department of Computer Science & Engineering");
-    const [refNo, setRefNo] = useState(`EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").slice(-4).toUpperCase()}`);
+    const [currentWorkshop, setCurrentWorkshop] = useState(workshop || (workshopsList && workshopsList[0]) || {});
+
+    // Institutional Letter Fields (Fixed Official Format)
+    const [institutionName, setInstitutionName] = useState("Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION");
+    const [departmentName, setDepartmentName] = useState(currentWorkshop?.department || currentUser?.department || "Department of Computer Science & Engineering");
+    const [refNo, setRefNo] = useState(`DYPCOEI/${(currentWorkshop?.department || currentUser?.department || "DEPT").toUpperCase().slice(0, 4)}/${new Date().getFullYear()}/${(currentWorkshop?._id || "001").toString().slice(-4).toUpperCase()}`);
     const [letterDate, setLetterDate] = useState(new Date().toISOString().split("T")[0]);
-    const [guestName, setGuestName] = useState(workshop.speakerName || "Distinguished Expert");
-    const [guestDesignation, setGuestDesignation] = useState(workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor");
-    const [guestOrg, setGuestOrg] = useState(workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University");
-    const [guestEmail, setGuestEmail] = useState(workshop.guestEmail || workshop.speakerContact || "");
-    const [eventTitle, setEventTitle] = useState(workshop.title || "Special Academic Session");
-    const [eventDate, setEventDate] = useState(workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : "");
-    const [eventTime, setEventTime] = useState(workshop.time || "10:00 AM - 01:00 PM");
-    const [eventVenue, setEventVenue] = useState(workshop.venue || "Campus Seminar Auditorium");
-    const [organizerName, setOrganizerName] = useState(workshop.submittedBy?.name || currentUser?.name || "Event Faculty Coordinator");
-    const [principalName, setPrincipalName] = useState("Dr. Academic Principal");
+    const [guestName, setGuestName] = useState(currentWorkshop?.speakerName || "Distinguished Expert");
+    const [guestDesignation, setGuestDesignation] = useState(currentWorkshop?.guestDesignation || currentWorkshop?.speakerBio || "Industry Consultant / Senior Professor");
+    const [guestOrg, setGuestOrg] = useState(currentWorkshop?.guestOrganization || currentWorkshop?.speakerOrganization || "Tech Enterprise / University");
+    const [guestEmail, setGuestEmail] = useState(currentWorkshop?.guestEmail || currentWorkshop?.speakerContact || "");
+    const [eventTitle, setEventTitle] = useState(currentWorkshop?.title || "Special Academic Session");
+    const [eventDate, setEventDate] = useState(currentWorkshop?.date ? new Date(currentWorkshop.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+    const [eventTime, setEventTime] = useState(currentWorkshop?.time || "10:00 AM - 01:00 PM");
+    const [eventVenue, setEventVenue] = useState(currentWorkshop?.venue || "Campus Seminar Auditorium");
+    const [organizerName, setOrganizerName] = useState(currentWorkshop?.submittedBy?.name || currentUser?.name || "Event Faculty Coordinator");
+    const [principalName, setPrincipalName] = useState("Dr. Suresh Mali");
+    const [signatoryStyle, setSignatoryStyle] = useState("role_sender"); // "role_sender" | "three_party"
+    
+    const [remunerationRate, setRemunerationRate] = useState(1500);
+    const [lectureHours, setLectureHours] = useState(2);
     
     // Custom body text
     const [invitationBody, setInvitationBody] = useState(
-        `It gives us immense pleasure to cordially invite you as our distinguished Resource Person / Guest Speaker for the session on "${workshop.title || "the designated topic"}". Your profound industry knowledge and research experience will greatly enrich the technical perspective of our faculty members and students.`
+        `On behalf of Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION, it gives us immense pleasure to cordially invite you as our distinguished Resource Person / Guest Speaker for the session on "${currentWorkshop?.title || "the designated topic"}". Your profound industry knowledge and research experience will greatly enrich the technical perspective of our faculty members and students.`
     );
     const [thankingBody, setThankingBody] = useState(
-        `On behalf of the Management, Principal, Faculty, and Students, we convey our heartfelt gratitude and sincere appreciation for delivering an enlightening and impactful session on "${workshop.title || "the designated topic"}". Your insights and interactive discourse were highly appreciated by all attendees.`
+        `On behalf of Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION, we convey our heartfelt gratitude and sincere appreciation for delivering an enlightening and impactful session on "${currentWorkshop?.title || "the designated topic"}". Your insights and interactive discourse were highly appreciated by all attendees.`
     );
+    const [offerBody, setOfferBody] = useState(
+        `We are pleased to offer you the engagement as Guest Speaker / Workshop Trainer for conducting the professional technical session on "${currentWorkshop?.title || "the designated topic"}". The session will provide practical technical exposure to our students and faculty members in line with industry standards.`
+    );
+
+    // Switch workshop helper
+    const handleSwitchWorkshop = (selectedId) => {
+        const found = workshopsList.find(w => String(w._id) === String(selectedId));
+        if (found) {
+            setCurrentWorkshop(found);
+            setDepartmentName(found.department || currentUser?.department || "Department of Computer Science & Engineering");
+            setRefNo(`EDU/${(found.department || currentUser?.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(found._id || "001").toString().slice(-4).toUpperCase()}`);
+            setGuestName(found.speakerName || "Distinguished Expert");
+            setGuestDesignation(found.guestDesignation || found.speakerBio || "Industry Consultant / Senior Professor");
+            setGuestOrg(found.guestOrganization || found.speakerOrganization || "Tech Enterprise / University");
+            setGuestEmail(found.guestEmail || found.speakerContact || "");
+            setEventTitle(found.title || "Special Academic Session");
+            setEventDate(found.date ? new Date(found.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]);
+            setEventTime(found.time || "10:00 AM - 01:00 PM");
+            setEventVenue(found.venue || "Campus Seminar Auditorium");
+            setOrganizerName(found.submittedBy?.name || currentUser?.name || "Event Faculty Coordinator");
+            setInvitationBody(`It gives us immense pleasure to cordially invite you as our distinguished Resource Person / Guest Speaker for the session on "${found.title || "the designated topic"}". Your profound industry knowledge and research experience will greatly enrich the technical perspective of our faculty members and students.`);
+            setThankingBody(`On behalf of the Management, Principal, Faculty, and Students, we convey our heartfelt gratitude and sincere appreciation for delivering an enlightening and impactful session on "${found.title || "the designated topic"}". Your insights and interactive discourse were highly appreciated by all attendees.`);
+            setScannedImage(letterType === "invitation" ? (found.scannedInvitation || "") : (found.scannedThankingLetter || ""));
+        }
+    };
 
     // Camera / Scanner state
     const [cameraStream, setCameraStream] = useState(null);
     const [cameraActive, setCameraActive] = useState(false);
     const [cameraFacing, setCameraFacing] = useState("environment"); // "user" or "environment"
     const [scannedImage, setScannedImage] = useState(
-        letterType === "invitation" ? (workshop.scannedInvitation || "") : (workshop.scannedThankingLetter || "")
+        letterType === "invitation" ? (currentWorkshop?.scannedInvitation || "") : (currentWorkshop?.scannedThankingLetter || "")
     );
     const [isSavingScan, setIsSavingScan] = useState(false);
 
@@ -49,19 +80,77 @@ export default function WorkshopLetterModal({
     const [isSending, setIsSending] = useState(false);
     const [sendSuccessMsg, setSendSuccessMsg] = useState("");
     const [sendErrorMsg, setSendErrorMsg] = useState("");
+    
+    // Extra Feature: Attach Created Letter in PDF format
+    const [attachCreatedPdf, setAttachCreatedPdf] = useState(true);
+    const [customMessage, setCustomMessage] = useState(
+        letterType === "invitation"
+            ? "We look forward to hosting you for this prestigious academic lecture. Please find our official signed letter attached in PDF format."
+            : "Thank you for the enlightening session. Please find attached our official letter of appreciation."
+    );
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const fileInputRef = useRef(null);
 
+    // Update default message when letterType changes
+    useEffect(() => {
+        setCustomMessage(
+            letterType === "invitation"
+                ? "We look forward to hosting you for this prestigious academic lecture. Please find our official signed letter attached in PDF format."
+                : "Thank you for the enlightening session. Please find attached our official letter of appreciation."
+        );
+    }, [letterType]);
+
     // Switch scanned image when letterType changes
     useEffect(() => {
         if (letterType === "invitation") {
-            setScannedImage(workshop.scannedInvitation || "");
+            setScannedImage(currentWorkshop?.scannedInvitation || "");
         } else {
-            setScannedImage(workshop.scannedThankingLetter || "");
+            setScannedImage(currentWorkshop?.scannedThankingLetter || "");
         }
-    }, [letterType, workshop]);
+    }, [letterType, currentWorkshop]);
+
+    // Preview or Download the Generated PDF Letterhead
+    const handleDownloadOrPreviewPdf = async () => {
+        setIsGeneratingPdf(true);
+        try {
+            const payload = {
+                letterData: {
+                    institutionName,
+                    departmentName,
+                    refNo,
+                    letterDate,
+                    letterType,
+                    guestName,
+                    guestDesignation,
+                    guestOrg,
+                    eventTitle,
+                    eventDate,
+                    eventTime,
+                    eventVenue,
+                    bodyText: letterType === "invitation" ? invitationBody : thankingBody,
+                    organizerName,
+                    principalName
+                }
+            };
+            const res = await api.post(`/workshops/${currentWorkshop?._id || "draft"}/generate-letter-pdf`, payload);
+            if (res.pdfBase64) {
+                const link = document.createElement("a");
+                link.href = res.pdfBase64;
+                link.download = res.filename || `${letterType}_letter.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (err) {
+            console.error("PDF download failed:", err);
+            alert("Failed to generate PDF letter. Please try again.");
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
 
     // Handle Camera Lifecycle
     useEffect(() => {
@@ -141,7 +230,7 @@ export default function WorkshopLetterModal({
         }
         setIsSavingScan(true);
         try {
-            const endpoint = `/workshops/${workshop._id}/scan`;
+            const endpoint = `/workshops/${currentWorkshop?._id || "draft"}/scan`;
             const payload = {
                 type: letterType,
                 scannedImageBase64: scannedImage
@@ -155,6 +244,53 @@ export default function WorkshopLetterModal({
             alert(err.response?.data?.error || "Failed to save scanned document.");
         } finally {
             setIsSavingScan(false);
+            setIsSavingScan(false);
+        }
+    };
+
+    // Download official PDF generated by backend with fixed master letterhead
+    const [downloadingOfficialPdf, setDownloadingOfficialPdf] = useState(false);
+
+    const handleDownloadOfficialPdf = async () => {
+        setDownloadingOfficialPdf(true);
+        try {
+            const payload = {
+                letterData: {
+                    institutionName: "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
+                    departmentName,
+                    refNo,
+                    letterDate,
+                    letterType,
+                    guestName,
+                    guestDesignation,
+                    guestOrg,
+                    eventTitle,
+                    eventDate,
+                    eventTime,
+                    eventVenue,
+                    bodyText: letterType === "invitation" ? invitationBody : (letterType === "thanking" ? thankingBody : offerBody),
+                    organizerName,
+                    principalName,
+                    signatoryType: signatoryStyle === "three_party" ? "three_party" : "single",
+                    lectureHours,
+                    remunerationRate,
+                    totalRemuneration: lectureHours * remunerationRate
+                }
+            };
+            const res = await api.post(`/workshops/${currentWorkshop?._id || "draft"}/generate-letter-pdf`, payload);
+            if (res.pdfBase64) {
+                const link = document.createElement("a");
+                link.href = res.pdfBase64;
+                link.download = res.filename || `Official_${letterType.toUpperCase()}_${(eventTitle || "Letter").replace(/\s+/g, "_")}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        } catch (err) {
+            console.error("PDF download error:", err);
+            alert("Failed to generate and download official letter PDF ❌");
+        } finally {
+            setDownloadingOfficialPdf(false);
         }
     };
 
@@ -169,16 +305,35 @@ export default function WorkshopLetterModal({
 
         try {
             const endpoint = letterType === "invitation" 
-                ? `/workshops/${workshop._id}/send-invitation` 
-                : `/workshops/${workshop._id}/send-thanking`;
+                ? `/workshops/${currentWorkshop?._id || "draft"}/send-invitation` 
+                : `/workshops/${currentWorkshop?._id || "draft"}/send-thanking`;
 
             const payload = {
                 guestEmail,
-                attachmentBase64: scannedImage || undefined
+                customMessage,
+                attachGeneratedPdf: attachCreatedPdf,
+                attachmentBase64: scannedImage || undefined,
+                letterData: {
+                    institutionName,
+                    departmentName,
+                    refNo,
+                    letterDate,
+                    letterType,
+                    guestName,
+                    guestDesignation,
+                    guestOrg,
+                    eventTitle,
+                    eventDate,
+                    eventTime,
+                    eventVenue,
+                    bodyText: letterType === "invitation" ? invitationBody : (letterType === "thanking" ? thankingBody : offerBody),
+                    organizerName,
+                    principalName
+                }
             };
 
             const res = await api.post(endpoint, payload);
-            setSendSuccessMsg(res.message || `Letter dispatched to ${guestEmail} successfully!`);
+            setSendSuccessMsg(res.message || `Official message and created letter (PDF format) dispatched to ${guestEmail} successfully!`);
             if (onUpdated) onUpdated();
         } catch (err) {
             console.error("Failed to dispatch email:", err);
@@ -205,12 +360,28 @@ export default function WorkshopLetterModal({
                             <div className="flex items-center space-x-2">
                                 <h3 className="font-bold text-lg text-white">Letter Management System</h3>
                                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700 font-mono">
-                                    {workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop"}
+                                    {currentWorkshop?.workshopType && currentWorkshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop"}
                                 </span>
                             </div>
-                            <p className="text-xs text-slate-400 truncate max-w-md">
-                                {workshop.title} &bull; Guest: <span className="text-indigo-300 font-medium">{workshop.speakerName}</span>
-                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-xs text-slate-400 truncate max-w-sm">
+                                    {currentWorkshop?.title || "Academic Event"} &bull; Guest: <span className="text-indigo-300 font-medium">{currentWorkshop?.speakerName || "Guest Expert"}</span>
+                                </p>
+                                {workshopsList && workshopsList.length > 1 && (
+                                    <select
+                                        value={currentWorkshop?._id}
+                                        onChange={(e) => handleSwitchWorkshop(e.target.value)}
+                                        className="bg-slate-800 border border-slate-700 text-[11px] text-indigo-300 rounded px-2 py-0.5 focus:outline-none focus:border-indigo-500 cursor-pointer font-semibold ml-2 max-w-[180px] truncate"
+                                        title="Switch Event"
+                                    >
+                                        {workshopsList.map(w => (
+                                            <option key={w._id} value={w._id} className="bg-slate-900 text-slate-200">
+                                                {w.title} ({w.speakerName || "Speaker"})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -222,14 +393,21 @@ export default function WorkshopLetterModal({
                                 onClick={() => setLetterType("invitation")}
                                 className={`px-3 py-1.5 rounded-md transition ${letterType === "invitation" ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
                             >
-                                ✉️ Invitation Letter
+                                ✉️ Invitation
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setLetterType("thanking")}
                                 className={`px-3 py-1.5 rounded-md transition ${letterType === "thanking" ? "bg-emerald-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
                             >
-                                🤝 Thanking / Appreciation Letter
+                                🤝 Thanking
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLetterType("offer")}
+                                className={`px-3 py-1.5 rounded-md transition ${letterType === "offer" ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
+                            >
+                                📜 Offer & Engagement
                             </button>
                         </div>
 
@@ -462,13 +640,42 @@ export default function WorkshopLetterModal({
                                         onChange={(e) => setInvitationBody(e.target.value)}
                                         className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-indigo-500"
                                     />
-                                ) : (
+                                ) : letterType === "thanking" ? (
                                     <textarea
                                         rows={4}
                                         value={thankingBody}
                                         onChange={(e) => setThankingBody(e.target.value)}
                                         className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-indigo-500"
                                     />
+                                ) : (
+                                    <div className="space-y-3">
+                                        <textarea
+                                            rows={4}
+                                            value={offerBody}
+                                            onChange={(e) => setOfferBody(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                        />
+                                        <div className="grid grid-cols-2 gap-3 bg-amber-500/10 p-3 rounded-lg border border-amber-500/30">
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-amber-300 uppercase mb-1">Session Hours</label>
+                                                <input
+                                                    type="number"
+                                                    value={lectureHours}
+                                                    onChange={(e) => setLectureHours(Number(e.target.value))}
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-amber-300 uppercase mb-1">Rate / Hour (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    value={remunerationRate}
+                                                    onChange={(e) => setRemunerationRate(Number(e.target.value))}
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -477,17 +684,24 @@ export default function WorkshopLetterModal({
                     {/* STEP 2: VIEW / PRINT LETTERHEAD */}
                     {activeStep === "view" && (
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-800/80 p-3 rounded-xl border border-slate-700">
                                 <div className="flex items-center space-x-2 text-xs text-slate-300">
                                     <span>🖨️</span>
-                                    <span>Print-ready Institutional Letterhead format. You can print or save as PDF.</span>
+                                    <span>Fixed Master Institutional Letterhead Format • DYPCOEI</span>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <button
-                                        onClick={handlePrint}
-                                        className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1"
+                                        onClick={handleDownloadOfficialPdf}
+                                        disabled={downloadingOfficialPdf}
+                                        className="px-3.5 py-1.5 bg-emerald-650 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1 shadow"
                                     >
-                                        <span>Print / PDF</span>
+                                        <span>{downloadingOfficialPdf ? "⏳ Generating..." : "📥 Download Official PDF"}</span>
+                                    </button>
+                                    <button
+                                        onClick={handlePrint}
+                                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1"
+                                    >
+                                        <span>Print</span>
                                     </button>
                                     <button
                                         onClick={() => setActiveStep("scan")}
@@ -499,19 +713,71 @@ export default function WorkshopLetterModal({
                                 </div>
                             </div>
 
-                            {/* Formal Institutional Paper / Letterhead */}
+                            {/* Signatory Mode Switcher */}
+                            <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-xs">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-slate-400 font-bold">Authorized Sender Identity:</span>
+                                    <span className="text-indigo-400 font-semibold">{currentUser?.name} ({currentUser?.role})</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-slate-400">Signature Style:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSignatoryStyle("role_sender")}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-bold ${signatoryStyle === "role_sender" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                                    >
+                                        Role Authority
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSignatoryStyle("three_party")}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-bold ${signatoryStyle === "three_party" ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                                    >
+                                        3-Party Signatures
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Formal Master Institutional Paper / Letterhead */}
                             <div className="bg-white text-slate-900 rounded-xl p-8 shadow-2xl max-w-3xl mx-auto border border-slate-300 font-serif leading-relaxed text-sm">
-                                {/* Header */}
-                                <div className="border-b-2 border-slate-900 pb-4 mb-6 text-center">
-                                    <h1 className="text-xl font-bold uppercase tracking-wider text-slate-900 font-sans">
-                                        {institutionName}
-                                    </h1>
-                                    <p className="text-xs uppercase font-sans font-semibold text-slate-600 tracking-wide mt-1">
-                                        Department of {departmentName}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500 font-sans mt-0.5">
-                                        Accredited by NAAC with 'A+' Grade &bull; Approved by AICTE, New Delhi &bull; Affiliated to University
-                                    </p>
+                                {/* Fixed Master College Letterhead Header */}
+                                <div className="border-b-2 border-[#800000] pb-3 mb-5 flex items-center justify-between gap-4 font-sans text-center">
+                                    <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+                                        <img
+                                            src="/assets/college_logo.jpeg"
+                                            alt="DYP Crest Logo"
+                                            className="w-12 h-12 object-contain"
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-[#800000] tracking-wide uppercase">
+                                            Dr. D. Y. Patil Educational Federation’s
+                                        </p>
+                                        <h1 className="text-sm sm:text-base font-extrabold uppercase tracking-tight text-[#1e1b4b] leading-tight mt-0.5">
+                                            Dr. D. Y. PATIL COLLEGE OF ENGINEERING &amp; INNOVATION
+                                        </h1>
+                                        <p className="text-[9.5px] font-bold text-slate-700 mt-0.5">
+                                            (An Autonomous Institute Affiliated to SPPU)
+                                        </p>
+                                        <p className="text-[8px] text-slate-500 leading-tight mt-0.5">
+                                            Survey No. 27/A/1/2C, Varale Campus, Near Talegaon Railway Station, Tal. Maval, Dist. Pune 410 507, Ph: 020 48522561, 565,566
+                                        </p>
+                                        <p className="text-[8px] text-slate-500 leading-tight">
+                                            Web Site: www.dypcoei.edu.in • Email: principal.dypcoei@dypatilef.com
+                                        </p>
+                                        <p className="text-[10px] font-bold text-indigo-900 uppercase mt-1">
+                                            Department of {departmentName}
+                                        </p>
+                                    </div>
+                                    <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+                                        <img
+                                            src="/assets/naac_logo.jpeg"
+                                            alt="NAAC A Seal"
+                                            className="w-12 h-12 object-contain"
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* Reference and Date */}
@@ -564,24 +830,40 @@ export default function WorkshopLetterModal({
                                         : "We look forward to sustained collaboration with you in our future academic endeavors."}
                                 </p>
 
-                                {/* Signatures */}
-                                <div className="pt-8 flex justify-between items-end font-sans text-xs">
-                                    <div className="text-center">
-                                        <div className="h-10"></div>
-                                        <div className="font-bold border-t border-slate-400 pt-1 px-4">{organizerName}</div>
-                                        <div className="text-[10px] text-slate-600">Faculty Coordinator</div>
+                                {/* Role-Based Signatures Section (Section 8) */}
+                                {signatoryStyle === "role_sender" ? (
+                                    <div className="pt-8 flex justify-end font-sans text-xs">
+                                        <div className="text-left min-w-[200px]">
+                                            <p className="text-slate-600 mb-6">Regards,</p>
+                                            <div className="border-t border-slate-400 pt-1">
+                                                <p className="font-bold text-sm text-slate-900">{currentUser?.name || organizerName}</p>
+                                                <p className="text-slate-700 font-medium">{currentUser?.designation || (currentUser?.role === "HOD" ? "Head of Department" : (currentUser?.role === "Principal" ? "Principal" : "Assistant Professor"))}</p>
+                                                {currentUser?.department && (
+                                                    <p className="text-slate-600 text-[11px]">Department of {currentUser?.department}</p>
+                                                )}
+                                                <p className="text-slate-500 text-[10px] font-sans">Dr. D. Y. PATIL COLLEGE OF ENGINEERING &amp; INNOVATION</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="text-center">
-                                        <div className="h-10"></div>
-                                        <div className="font-bold border-t border-slate-400 pt-1 px-4">Head of Department</div>
-                                        <div className="text-[10px] text-slate-600">Dept. of {departmentName}</div>
+                                ) : (
+                                    <div className="pt-8 flex justify-between items-end font-sans text-xs">
+                                        <div className="text-center">
+                                            <div className="h-10"></div>
+                                            <div className="font-bold border-t border-slate-400 pt-1 px-4">{organizerName}</div>
+                                            <div className="text-[10px] text-slate-600">Faculty Coordinator</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="h-10"></div>
+                                            <div className="font-bold border-t border-slate-400 pt-1 px-4">Head of Department</div>
+                                            <div className="text-[10px] text-slate-600">Dept. of {departmentName}</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="h-10"></div>
+                                            <div className="font-bold border-t border-slate-400 pt-1 px-4">{principalName}</div>
+                                            <div className="text-[10px] text-slate-600">Principal</div>
+                                        </div>
                                     </div>
-                                    <div className="text-center">
-                                        <div className="h-10"></div>
-                                        <div className="font-bold border-t border-slate-400 pt-1 px-4">{principalName}</div>
-                                        <div className="text-[10px] text-slate-600">Principal</div>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -775,12 +1057,69 @@ export default function WorkshopLetterModal({
                                         />
                                     </div>
 
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                                            Personalized Message for Guest <span className="text-slate-400 text-[10px]">(Received in email message)</span>
+                                        </label>
+                                        <textarea
+                                            rows="2"
+                                            value={customMessage}
+                                            onChange={(e) => setCustomMessage(e.target.value)}
+                                            placeholder="Enter a message that the invited guest will receive..."
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 leading-relaxed"
+                                        />
+                                    </div>
+
+                                    {/* EXTRA FEATURE: ATTACH CREATED LETTER IN PDF FORMAT */}
+                                    <div className="bg-gradient-to-r from-indigo-950/60 to-slate-900 border border-indigo-500/40 rounded-xl p-4 space-y-3 shadow-inner">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-center gap-2.5">
+                                                <input
+                                                    type="checkbox"
+                                                    id="attachPdfCheckbox"
+                                                    checked={attachCreatedPdf}
+                                                    onChange={(e) => setAttachCreatedPdf(e.target.checked)}
+                                                    className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-indigo-500 cursor-pointer"
+                                                />
+                                                <label htmlFor="attachPdfCheckbox" className="font-bold text-xs text-white cursor-pointer select-none">
+                                                    📄 Attach Created Letter in PDF Format to Email
+                                                </label>
+                                            </div>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                                                PDF Feature Active
+                                            </span>
+                                        </div>
+
+                                        <p className="text-[11px] text-slate-300 leading-relaxed pl-6">
+                                            When enabled, the invited guest will receive an official institutional email message with the customized <strong>{letterType === "invitation" ? "Invitation" : "Appreciation"} Letter attached as an official PDF document</strong>.
+                                        </p>
+
+                                        <div className="flex items-center justify-between pt-1 pl-6">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-emerald-400 font-mono">
+                                                    {attachCreatedPdf ? "✓ PDF Attachment Included" : "⚠️ PDF Attachment Excluded"}
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={handleDownloadOrPreviewPdf}
+                                                disabled={isGeneratingPdf}
+                                                className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/50 text-indigo-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50"
+                                                title="Preview or save the official PDF letterhead directly"
+                                            >
+                                                <span>{isGeneratingPdf ? "⏳ Generating..." : "📥 Download / Preview PDF Letter"}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Email Payload Summary */}
                                     <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800 text-xs space-y-2">
                                         <div className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
-                                            Email Payload Summary:
+                                            Email Payload & Letter Dispatch Summary:
                                         </div>
                                         <div className="text-slate-400">
-                                            <span className="text-slate-200 font-medium">To:</span> {guestName} &lt;{guestEmail || "No email specified"}&gt;
+                                            <span className="text-slate-200 font-medium">Recipient:</span> {guestName} &lt;{guestEmail || "No email specified"}&gt;
                                         </div>
                                         <div className="text-slate-400">
                                             <span className="text-slate-200 font-medium">Subject:</span>{" "}
@@ -788,12 +1127,24 @@ export default function WorkshopLetterModal({
                                                 ? `Official Academic Invitation: ${eventTitle} (${workshop.workshopType || "Workshop"})`
                                                 : `Letter of Gratitude & Appreciation: ${eventTitle}`}
                                         </div>
-                                        <div className="text-slate-400 flex items-center space-x-2">
-                                            <span className="text-slate-200 font-medium">Attachment:</span>
-                                            {scannedImage ? (
-                                                <span className="text-emerald-400 font-mono text-[11px]">📎 Scanned Document Attached</span>
-                                            ) : (
-                                                <span className="text-slate-500 italic text-[11px]">No scanned attachment (HTML body only)</span>
+                                        <div className="text-slate-400">
+                                            <span className="text-slate-200 font-medium">Message Body:</span>{" "}
+                                            <span className="italic text-slate-300">"{customMessage || "Standard institutional greeting"}"</span>
+                                        </div>
+                                        <div className="text-slate-400 flex flex-wrap items-center gap-2 pt-1 border-t border-slate-850">
+                                            <span className="text-slate-200 font-medium">Attachments:</span>
+                                            {attachCreatedPdf && (
+                                                <span className="text-indigo-300 font-mono text-[10px] bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/60">
+                                                    📄 Official Created Letter (PDF)
+                                                </span>
+                                            )}
+                                            {scannedImage && (
+                                                <span className="text-emerald-400 font-mono text-[10px] bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700/60">
+                                                    📎 Scanned Physical Copy
+                                                </span>
+                                            )}
+                                            {!attachCreatedPdf && !scannedImage && (
+                                                <span className="text-slate-500 italic text-[11px]">No attachments (Text email only)</span>
                                             )}
                                         </div>
                                     </div>
@@ -803,13 +1154,13 @@ export default function WorkshopLetterModal({
                                             type="button"
                                             disabled={isSending || !guestEmail}
                                             onClick={handleSendEmail}
-                                            className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/40 text-sm flex items-center justify-center space-x-2 transition"
+                                            className="w-full py-3 bg-gradient-to-r from-indigo-600 via-indigo-650 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg shadow-indigo-900/40 text-sm flex items-center justify-center space-x-2 transition"
                                         >
                                             {isSending ? (
-                                                <span>⏳ Dispatching Email via SMTP...</span>
+                                                <span>⏳ Dispatching Email Message & PDF Letter...</span>
                                             ) : (
                                                 <>
-                                                    <span>🚀 Send {letterType === "invitation" ? "Invitation" : "Thanking"} Email Now</span>
+                                                    <span>🚀 Send {letterType === "invitation" ? "Invitation" : "Thanking"} Email with PDF Letter Now</span>
                                                 </>
                                             )}
                                         </button>

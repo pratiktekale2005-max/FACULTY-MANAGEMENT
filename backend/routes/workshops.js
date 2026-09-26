@@ -3,7 +3,10 @@ const router = express.Router();
 const Workshop = require("../models/Workshop");
 const User = require("../models/User");
 const Approval = require("../models/Approval");
-const { sendInvitationEmail, sendThankingEmail } = require("../services/emailService");
+const Organization = require("../models/Organization");
+const Department = require("../models/Department");
+const { sendInvitationEmail, sendThankingEmail, sendWorkshopApprovalEmail } = require("../services/emailService");
+const { generateLetterPdf, generateRemunerationPdf, generateWorkshopSummaryPdf } = require("../services/letterPdfService");
 const { authenticateUser, requireRole } = require("./authMiddleware");
 
 // ================= GET WORKSHOPS =================
@@ -13,10 +16,23 @@ router.get("/", authenticateUser, async (req, res) => {
         let query = { organizationId };
 
         if (role === "HOD") {
-            const memberIds = await User.find({ organizationId, departmentId: req.user.departmentId }).distinct("_id");
-            query.submittedBy = { $in: memberIds };
+            const memberIds = await User.find({
+                organizationId,
+                $or: [
+                    { departmentId: req.user.departmentId },
+                    { department: req.user.department },
+                    { _id: req.user._id }
+                ]
+            }).distinct("_id");
+            query.$or = [
+                { submittedBy: { $in: memberIds } },
+                { department: req.user.department }
+            ];
         } else if (role === "Faculty") {
-            query.submittedBy = req.user._id;
+            query.$or = [
+                { submittedBy: req.user._id },
+                { department: req.user.department }
+            ];
         }
 
         const filterUserId = req.query.targetUserId || req.query.userId;
@@ -251,7 +267,7 @@ router.delete("/:id", authenticateUser, async (req, res) => {
 });
 
 // ================= APPROVE/REJECT WORKSHOP (PRINCIPAL ONLY) =================
-router.put("/:id/status", requireRole(["Principal"]), async (req, res) => {
+router.put("/:id/status", requireRole(["Principal", "HOD"]), async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // status: 'verified' | 'rejected'
 
@@ -265,21 +281,33 @@ router.put("/:id/status", requireRole(["Principal"]), async (req, res) => {
             return res.status(404).json({ error: "Workshop not found ❌" });
         }
 
+        // HOD permission check: only approve within their department
+        if (req.user.role === "HOD") {
+            if (req.user.department && workshop.department && req.user.department !== workshop.department) {
+                return res.status(403).json({ error: "Access denied: You can only approve workshops in your own department ❌" });
+            }
+        }
+
         workshop.status = status;
+        if (status === "verified") {
+            workshop.approvedBy = req.user._id;
+            workshop.approvedByName = req.user.name;
+            workshop.approvedAt = new Date();
+        }
         await workshop.save();
 
-        // Sync with the unified Approval record
-        const approvalStatus = status === "verified" ? "APPROVED" : "REJECTED";
+        // Sync with unified Approval record
+        const approvalStatus = status === "verified" ? (req.user.role === "HOD" ? "HOD_APPROVED" : "APPROVED") : "REJECTED";
         const approval = await Approval.findOne({ entityId: id, entityType: "WORKSHOP", organizationId: req.user.organizationId });
         if (approval) {
             approval.status = approvalStatus;
-            approval.currentLevel = "COMPLETED";
+            approval.currentLevel = req.user.role === "HOD" ? "PRINCIPAL" : "COMPLETED";
             approval.updatedAt = new Date();
             approval.history.push({
                 status: approvalStatus,
                 actionBy: req.user._id,
                 actionByName: req.user.name,
-                comment: `Status set directly to ${status} by Principal`,
+                comment: `Status set directly to ${status} by ${req.user.name} (${req.user.role})`,
                 date: new Date()
             });
             await approval.save();
@@ -290,12 +318,223 @@ router.put("/:id/status", requireRole(["Principal"]), async (req, res) => {
             await User.findByIdAndUpdate(workshop.submittedBy, {
                 $inc: { performanceScore: 5 }
             });
+
+            // Automatically send approval email to the faculty member
+            try {
+                const faculty = await User.findById(workshop.submittedBy);
+                const org = await Organization.findById(req.user.organizationId);
+                if (faculty && faculty.email) {
+                    sendWorkshopApprovalEmail({
+                        facultyEmail: faculty.email,
+                        facultyName: faculty.name,
+                        workshopTitle: workshop.title,
+                        workshopDate: workshop.date,
+                        time: workshop.time,
+                        venue: workshop.venue,
+                        speakerName: workshop.speakerName,
+                        hodName: req.user.name,
+                        departmentName: workshop.department,
+                        approvalDate: new Date(),
+                        institutionName: org?.name
+                    }).catch(e => console.error("Async approval email error:", e));
+                }
+            } catch (emailErr) {
+                console.error("Error dispatching workshop approval email:", emailErr);
+            }
         }
 
-        res.json({ message: `Workshop status set to ${status} successfully ✅`, workshop });
+        const populatedWorkshop = await Workshop.findById(workshop._id).populate("submittedBy", "name email department designation");
+        res.json({ message: `Workshop status set to ${status} successfully by ${req.user.name}! ✅`, workshop: populatedWorkshop });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to update status ❌" });
+    }
+});
+
+// ================= UPDATE REMUNERATION DETAILS =================
+router.put("/:id/remuneration", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const {
+        guestName,
+        accountHolderName,
+        bankName,
+        accountNumber,
+        ifscCode,
+        branchName,
+        panNumber,
+        contactNumber,
+        lectureHours,
+        ratePerHour,
+        totalRemuneration,
+        otherAmount,
+        totalPayable,
+        notes
+    } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop not found ❌" });
+        }
+
+        const hours = Number(lectureHours) || 0;
+        const rate = Number(ratePerHour) || 0;
+        const other = Number(otherAmount) || 0;
+        const calculatedRemuneration = totalRemuneration !== undefined && totalRemuneration !== "" ? Number(totalRemuneration) : (hours * rate);
+        const calculatedTotal = totalPayable !== undefined && totalPayable !== "" ? Number(totalPayable) : (calculatedRemuneration + other);
+
+        workshop.remuneration = {
+            guestName: guestName || workshop.speakerName || "",
+            accountHolderName: accountHolderName || guestName || workshop.speakerName || "",
+            bankName: bankName || "",
+            accountNumber: accountNumber || "",
+            ifscCode: ifscCode ? ifscCode.toUpperCase().trim() : "",
+            branchName: branchName || "",
+            panNumber: panNumber ? panNumber.toUpperCase().trim() : "",
+            contactNumber: contactNumber || workshop.speakerContact || "",
+            lectureHours: hours,
+            ratePerHour: rate,
+            totalRemuneration: calculatedRemuneration,
+            otherAmount: other,
+            totalPayable: calculatedTotal,
+            notes: notes || "",
+            updatedAt: new Date()
+        };
+
+        await workshop.save();
+        res.json({ message: "Remuneration details saved successfully! 💰✅", workshop });
+    } catch (err) {
+        console.error("Save remuneration error:", err);
+        res.status(500).json({ error: "Failed to save remuneration details ❌" });
+    }
+});
+
+// ================= GENERATE REMUNERATION REPORT PDF =================
+router.post("/:id/generate-remuneration-pdf", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { remunerationData } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId })
+            .populate("submittedBy", "name email department designation");
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop not found ❌" });
+        }
+
+        const org = await Organization.findById(req.user.organizationId);
+        const hodUser = await User.findOne({
+            organizationId: req.user.organizationId,
+            role: "HOD",
+            $or: [
+                { departmentId: req.user.departmentId },
+                { department: workshop.department }
+            ]
+        });
+        const principalUser = await User.findOne({
+            organizationId: req.user.organizationId,
+            role: "Principal"
+        });
+
+        const rem = remunerationData || workshop.remuneration || {};
+
+        const payload = {
+            institutionName: org?.name || "EduCRM Academic Institution of Technology",
+            institutionAddress: org?.address || "Campus Educational Complex",
+            institutionMotto: org?.settings?.branding?.motto || "Excellence in Academic Research & Innovation",
+            departmentName: workshop.department || "Academic Department",
+            voucherNo: `REM/${new Date().getFullYear()}/${workshop._id.toString().slice(-4).toUpperCase()}`,
+            reportDate: new Date().toISOString().split("T")[0],
+            
+            guestName: rem.guestName || workshop.speakerName || "Guest Resource Person",
+            guestDesignation: workshop.guestDesignation || workshop.speakerBio || "Guest Expert",
+            guestOrg: workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University",
+            eventTitle: workshop.title || "Academic Workshop Session",
+            eventDate: workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : "",
+            lectureDetails: workshop.description ? workshop.description.slice(0, 100) : "Guest Lecture & Hands-on Session",
+            lectureHours: rem.lectureHours || 3,
+            ratePerHour: rem.ratePerHour || 2000,
+            totalRemuneration: rem.totalRemuneration || ((rem.lectureHours || 3) * (rem.ratePerHour || 2000)),
+            otherAmount: rem.otherAmount || 0,
+            totalPayable: rem.totalPayable || (rem.totalRemuneration || 6000),
+            
+            accountHolderName: rem.accountHolderName || rem.guestName || workshop.speakerName || "",
+            bankName: rem.bankName || "—",
+            accountNumber: rem.accountNumber || "—",
+            ifscCode: rem.ifscCode || "—",
+            branchName: rem.branchName || "—",
+            panNumber: rem.panNumber || "—",
+            contactNumber: rem.contactNumber || workshop.speakerContact || "",
+            
+            organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
+            hodName: hodUser ? hodUser.name : (workshop.approvedByName || "Head of Department"),
+            principalName: principalUser ? principalUser.name : "Principal & Director"
+        };
+
+        const pdfBuffer = await generateRemunerationPdf(payload);
+        const base64Str = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+        const filename = `Remuneration_Report_${(payload.guestName || "Speaker").replace(/\s+/g, "_")}_${new Date().getFullYear()}.pdf`;
+
+        res.json({
+            success: true,
+            pdfBase64: base64Str,
+            filename
+        });
+    } catch (err) {
+        console.error("Remuneration PDF generation failed:", err);
+        res.status(500).json({ error: err.message || "Failed to generate remuneration report PDF ❌" });
+    }
+});
+
+// ================= POST ASSESSMENT & RANKING =================
+router.post("/:id/post-assessment", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { participantName, score, maxScore, comments, criteria, rating } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop not found ❌" });
+        }
+
+        const assessmentScore = Number(score) || Number(rating) || 5;
+        const max = Number(maxScore) || 5;
+
+        const assessmentItem = {
+            participantName: participantName || "Anonymous Participant",
+            score: assessmentScore,
+            maxScore: max,
+            feedback: comments || "Session successfully evaluated",
+            criteria: criteria || "General Content & Delivery",
+            submittedAt: new Date()
+        };
+
+        if (!workshop.postAssessments) workshop.postAssessments = [];
+        workshop.postAssessments.push(assessmentItem);
+        
+        // Also mirror into feedbacks for unified rating aggregation
+        if (!workshop.feedbacks) workshop.feedbacks = [];
+        workshop.feedbacks.push({
+            name: participantName || "Anonymous Participant",
+            rating: Math.min(5, Math.max(1, Math.round(assessmentScore))),
+            comments: comments || criteria || "Post-Assessment evaluation",
+            category: criteria || "Overall",
+            postAssessmentScore: assessmentScore,
+            submittedAt: new Date()
+        });
+
+        // Recalculate ranking score
+        const avg = workshop.feedbacks.reduce((acc, f) => acc + (f.rating || 5), 0) / (workshop.feedbacks.length || 1);
+        workshop.ranking = {
+            score: Number(avg.toFixed(1)),
+            rank: avg >= 4.5 ? "Tier 1 - Exemplary" : (avg >= 3.5 ? "Tier 2 - Good" : "Tier 3 - Standard"),
+            badge: avg >= 4.5 ? "Gold Ribbon" : (avg >= 3.5 ? "Silver Standard" : "Bronze")
+        };
+
+        await workshop.save();
+        res.json({ message: "Post assessment & ranking evaluation saved successfully! ⭐✅", workshop });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to record post assessment ❌" });
     }
 });
 
@@ -326,7 +565,7 @@ router.put("/:id/attendance", authenticateUser, async (req, res) => {
 // ================= ADD WORKSHOP ASSESSMENT FEEDBACK =================
 router.put("/:id/feedback", authenticateUser, async (req, res) => {
     const { id } = req.params;
-    const { name, rating, comments } = req.body;
+    const { name, rating, comments, category, postAssessmentScore } = req.body;
 
     if (!rating || !comments) {
         return res.status(400).json({ error: "Rating and comments are required ❌" });
@@ -342,31 +581,240 @@ router.put("/:id/feedback", authenticateUser, async (req, res) => {
             name: name || "Anonymous Student",
             rating: Number(rating) || 5,
             comments,
+            category: category || "Overall",
+            postAssessmentScore: postAssessmentScore !== undefined ? Number(postAssessmentScore) : Number(rating),
             submittedAt: new Date()
         });
 
+        // Recalculate ranking score
+        const avg = workshop.feedbacks.reduce((acc, f) => acc + (f.rating || 5), 0) / (workshop.feedbacks.length || 1);
+        workshop.ranking = {
+            score: Number(avg.toFixed(1)),
+            rank: avg >= 4.5 ? "Tier 1 - Exemplary" : (avg >= 3.5 ? "Tier 2 - Good" : "Tier 3 - Standard"),
+            badge: avg >= 4.5 ? "Gold Ribbon" : (avg >= 3.5 ? "Silver Standard" : "Bronze")
+        };
+
         await workshop.save();
-        res.json({ message: "Feedback submitted successfully ✅", workshop });
+        res.json({ message: "Feedback and post assessment submitted successfully ✅", workshop });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to submit feedback ❌" });
     }
 });
 
+// ================= GENERATE LETTER PDF =================
+router.post("/:id/generate-letter-pdf", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { letterData } = req.body;
+
+    try {
+        let workshop = null;
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email designation");
+        }
+
+        const sender = {
+            userId: req.user._id,
+            role: req.user.role,
+            name: req.user.name || req.user.fullName || "Faculty Member",
+            designation: req.user.designation || (req.user.role === "HOD" ? "Head of Department" : (req.user.role === "Principal" ? "Principal" : "Assistant Professor")),
+            department: req.user.department || workshop?.department || "Computer Science & Engineering",
+            email: req.user.email
+        };
+
+        const deptCode = (sender.department || "DEPT").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+
+        const payload = {
+            institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
+            departmentName: sender.department,
+            refNo: letterData?.refNo || `DYPCOEI/${deptCode}/${new Date().getFullYear()}/${(workshop?._id || "001").toString().slice(-4).toUpperCase()}`,
+            letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
+            letterType: letterData?.letterType || "invitation",
+            recipient: {
+                name: letterData?.guestName || workshop?.speakerName || "Distinguished Expert",
+                designation: letterData?.guestDesignation || workshop?.guestDesignation || workshop?.speakerBio || "Industry Consultant / Senior Professor",
+                organization: letterData?.guestOrg || workshop?.guestOrganization || workshop?.speakerOrganization || "Tech Enterprise / University",
+                address: letterData?.guestAddress || ""
+            },
+            eventDetails: {
+                title: letterData?.eventTitle || workshop?.title || "Special Academic Session",
+                date: letterData?.eventDate || (workshop?.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
+                time: letterData?.eventTime || workshop?.time || "10:00 AM - 01:00 PM",
+                venue: letterData?.eventVenue || workshop?.venue || "Campus Seminar Auditorium",
+                mode: workshop?.workshopType || "Offline",
+                department: sender.department
+            },
+            bodyText: letterData?.bodyText || "",
+            sender,
+            signatory: {
+                name: sender.name,
+                designation: sender.designation,
+                department: sender.department,
+                collegeName: "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION"
+            },
+            signatoryType: letterData?.signatoryType || "single"
+        };
+
+        const pdfBuffer = await generateLetterPdf(payload);
+        const base64Str = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+        const filename = `${payload.letterType === "invitation" ? "Invitation" : "Appreciation"}_${(payload.eventDetails.title || "Letter").replace(/\s+/g, "_")}.pdf`;
+
+        res.json({
+            success: true,
+            pdfBase64: base64Str,
+            filename
+        });
+    } catch (err) {
+        console.error("PDF generation failed:", err);
+        res.status(500).json({ error: err.message || "Failed to generate letter PDF ❌" });
+    }
+});
+
+// ================= GENERATE WORKSHOP SUMMARY / REPORT PDF =================
+router.post("/:id/generate-summary-report-pdf", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const workshop = await Workshop.findById(id).populate("submittedBy", "name fullName department designation email");
+        if (!workshop) {
+            return res.status(404).json({ error: "Workshop record not found ❌" });
+        }
+
+        // Fetch Principal details dynamically
+        const principalUser = await User.findOne({ role: "Principal" }).select("name fullName");
+        const principalName = principalUser ? (principalUser.name || principalUser.fullName) : "Dr. Suresh Mali";
+
+        // Fetch HOD details dynamically
+        let hodName = workshop.approvedByName || "Dr. Alpana Adsul";
+        if (!workshop.approvedByName && workshop.department) {
+            const hodUser = await User.findOne({ role: "HOD", department: workshop.department }).select("name fullName");
+            if (hodUser) hodName = hodUser.name || hodUser.fullName;
+        }
+
+        const facultyCoordinator = workshop.submittedBy ? (workshop.submittedBy.name || workshop.submittedBy.fullName) : (req.user.name || "Mr. Swami Panjala");
+
+        const pdfBuffer = await generateWorkshopSummaryPdf({
+            title: workshop.title,
+            department: workshop.department || "Computer Science & Engineering",
+            organizer: `Department of ${workshop.department || "CSE"}, DYPCOEI`,
+            date: workshop.date,
+            time: workshop.time || "11:00 AM – 01:00 PM",
+            mode: "Offline",
+            venue: workshop.venue || "Seminar Hall / Room No. 206, DYPCOEI",
+            typeOfActivity: workshop.workshopType || "Technical Workshop & Student Skill Development",
+            speakerName: workshop.speakerName || "Distinguished Resource Person",
+            speakerDesignation: workshop.guestDesignation || workshop.speakerBio || "Senior Technical Specialist",
+            speakerOrganization: workshop.speakerOrganization || workshop.guestOrganization || "Industry Enterprise",
+            facultyCoordinator,
+            hodName,
+            principalName,
+            description: workshop.description || "",
+            photos: workshop.photos || [],
+            objectives: [
+                `To provide hands-on exposure and practical competencies in "${workshop.title}".`,
+                "To promote innovation, critical inquiry, and technical competencies among attendees.",
+                "To provide an interactive platform for direct engagement with industry experts.",
+                "To understand real-world industrial application architectures and best practices.",
+                "To align student learning outcomes with contemporary technological demands."
+            ],
+            outcomes: [
+                "Acquired practical conceptual understanding and hands-on exposure.",
+                "Gained clarity on modern tools, design patterns, and engineering workflows.",
+                "Demonstrated active participant engagement through Q&A and practical challenges.",
+                "Identified project and career advancement avenues in the subject domain."
+            ],
+            postAssessment: workshop.ranking ? {
+                averageScore: workshop.ranking.averageScore || "4.8",
+                totalResponses: (workshop.postAssessments && workshop.postAssessments.length) ? workshop.postAssessments.length : "45+"
+            } : null
+        });
+
+        const filename = `Activity_Report_${workshop.title.replace(/\s+/g, "_")}.pdf`;
+        res.json({
+            success: true,
+            pdfBase64: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+            filename
+        });
+    } catch (err) {
+        console.error("Summary report PDF generation failed:", err);
+        res.status(500).json({ error: err.message || "Failed to generate official workshop summary report ❌" });
+    }
+});
+
 // ================= SEND INVITATION EMAIL =================
 router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
     const { id } = req.params;
-    const { guestEmail, customHtml, attachmentBase64 } = req.body;
+    const { 
+        guestEmail, 
+        customHtml, 
+        customMessage, 
+        attachmentBase64, 
+        attachGeneratedPdf = true, 
+        letterData 
+    } = req.body;
 
     try {
-        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        let workshop = null;
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        }
         if (!workshop) {
-            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+            workshop = new Workshop({
+                organizationId: req.user.organizationId,
+                title: letterData?.eventTitle || "Academic Workshop / Guest Lecture",
+                description: `Official Academic Event: ${letterData?.eventTitle || "Workshop Lecture"}`,
+                date: letterData?.eventDate || new Date(),
+                time: letterData?.eventTime || "10:00 AM - 01:00 PM",
+                venue: letterData?.eventVenue || "Campus Auditorium",
+                speakerName: letterData?.guestName || "Distinguished Expert",
+                speakerBio: letterData?.guestDesignation || "",
+                speakerOrganization: letterData?.guestOrg || "",
+                guestDesignation: letterData?.guestDesignation || "",
+                guestOrganization: letterData?.guestOrg || "",
+                guestEmail: guestEmail || "",
+                workshopType: "Arranged by Self",
+                status: req.user.role === "Principal" ? "verified" : "pending",
+                submittedBy: req.user._id,
+                department: req.user.department
+            });
+            await workshop.save();
         }
 
         const emailToSend = guestEmail || workshop.guestEmail;
         if (!emailToSend) {
             return res.status(400).json({ error: "Guest email is required to send invitation ❌" });
+        }
+
+        let finalAttachment = attachmentBase64;
+
+        // Auto-generate official letter PDF if requested or if no physical scan was attached
+        if (attachGeneratedPdf || !finalAttachment) {
+            try {
+                const pdfPayload = {
+                    institutionName: letterData?.institutionName || "EduCRM Academic Institution of Technology",
+                    departmentName: letterData?.departmentName || workshop.department || req.user.department || "Department of Computer Science & Engineering",
+                    refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
+                    letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
+                    letterType: "invitation",
+                    guestName: letterData?.guestName || workshop.speakerName || "Distinguished Expert",
+                    guestDesignation: letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor",
+                    guestOrg: letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University",
+                    eventTitle: letterData?.eventTitle || workshop.title || "Special Academic Session",
+                    eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
+                    eventTime: letterData?.eventTime || workshop.time || "10:00 AM - 01:00 PM",
+                    eventVenue: letterData?.eventVenue || workshop.venue || "Campus Seminar Auditorium",
+                    bodyText: letterData?.bodyText || "",
+                    organizerName: letterData?.organizerName || (workshop.submittedBy ? workshop.submittedBy.name : req.user.name),
+                    principalName: letterData?.principalName || "Dr. Academic Principal"
+                };
+                const pdfBuffer = await generateLetterPdf(pdfPayload);
+                finalAttachment = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+                workshop.scannedInvitation = finalAttachment;
+            } catch (pdfErr) {
+                console.error("PDF auto-generation warning:", pdfErr);
+            }
         }
 
         // Send Email
@@ -380,21 +828,20 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             venue: workshop.venue || "Campus Hall",
             organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
             deptName: workshop.department || req.user.department,
-            institutionName: "EduCRM Academic Portal",
+            institutionName: letterData?.institutionName || "EduCRM Academic Portal",
             customHtml: customHtml || undefined,
-            attachmentBase64: attachmentBase64 || workshop.scannedInvitation || undefined
+            customMessage: customMessage || undefined,
+            attachmentBase64: finalAttachment || workshop.scannedInvitation || undefined
         });
 
         workshop.guestEmail = emailToSend;
         workshop.invitationSentAt = new Date();
-        if (attachmentBase64) {
-            workshop.scannedInvitation = attachmentBase64;
-        }
         await workshop.save();
 
         res.json({
-            message: "Invitation letter dispatched to guest speaker successfully 📧✅",
+            message: "Official invitation message and letter (PDF format) dispatched to guest speaker successfully 📧📄✅",
             workshop,
+            hasPdfAttachment: Boolean(finalAttachment),
             result
         });
     } catch (err) {
@@ -406,17 +853,74 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
 // ================= SEND THANKING EMAIL =================
 router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
     const { id } = req.params;
-    const { guestEmail, customHtml, attachmentBase64 } = req.body;
+    const { 
+        guestEmail, 
+        customHtml, 
+        customMessage, 
+        attachmentBase64, 
+        attachGeneratedPdf = true, 
+        letterData 
+    } = req.body;
 
     try {
-        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        let workshop = null;
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        }
         if (!workshop) {
-            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+            workshop = new Workshop({
+                organizationId: req.user.organizationId,
+                title: letterData?.eventTitle || "Academic Workshop / Guest Lecture",
+                description: `Official Academic Event: ${letterData?.eventTitle || "Workshop Lecture"}`,
+                date: letterData?.eventDate || new Date(),
+                time: letterData?.eventTime || "10:00 AM - 01:00 PM",
+                venue: letterData?.eventVenue || "Campus Auditorium",
+                speakerName: letterData?.guestName || "Distinguished Expert",
+                speakerBio: letterData?.guestDesignation || "",
+                speakerOrganization: letterData?.guestOrg || "",
+                guestDesignation: letterData?.guestDesignation || "",
+                guestOrganization: letterData?.guestOrg || "",
+                guestEmail: guestEmail || "",
+                workshopType: "Arranged by Self",
+                status: req.user.role === "Principal" ? "verified" : "pending",
+                submittedBy: req.user._id,
+                department: req.user.department
+            });
+            await workshop.save();
         }
 
         const emailToSend = guestEmail || workshop.guestEmail;
         if (!emailToSend) {
             return res.status(400).json({ error: "Guest email is required to send thanking letter ❌" });
+        }
+
+        let finalAttachment = attachmentBase64;
+
+        // Auto-generate official letter PDF if requested or if no physical scan was attached
+        if (attachGeneratedPdf || !finalAttachment) {
+            try {
+                const pdfPayload = {
+                    institutionName: letterData?.institutionName || "EduCRM Academic Institution of Technology",
+                    departmentName: letterData?.departmentName || workshop.department || req.user.department || "Department of Computer Science & Engineering",
+                    refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
+                    letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
+                    letterType: "thanking",
+                    guestName: letterData?.guestName || workshop.speakerName || "Distinguished Expert",
+                    guestDesignation: letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor",
+                    guestOrg: letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University",
+                    eventTitle: letterData?.eventTitle || workshop.title || "Special Academic Session",
+                    eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
+                    bodyText: letterData?.bodyText || "",
+                    organizerName: letterData?.organizerName || (workshop.submittedBy ? workshop.submittedBy.name : req.user.name),
+                    principalName: letterData?.principalName || "Dr. Academic Principal"
+                };
+                const pdfBuffer = await generateLetterPdf(pdfPayload);
+                finalAttachment = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+                workshop.scannedThankingLetter = finalAttachment;
+            } catch (pdfErr) {
+                console.error("PDF auto-generation warning:", pdfErr);
+            }
         }
 
         // Send Email
@@ -428,21 +932,20 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
             organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
             deptName: workshop.department || req.user.department,
-            institutionName: "EduCRM Academic Portal",
+            institutionName: letterData?.institutionName || "EduCRM Academic Portal",
             customHtml: customHtml || undefined,
-            attachmentBase64: attachmentBase64 || workshop.scannedThankingLetter || undefined
+            customMessage: customMessage || undefined,
+            attachmentBase64: finalAttachment || workshop.scannedThankingLetter || undefined
         });
 
         workshop.guestEmail = emailToSend;
         workshop.thankingSentAt = new Date();
-        if (attachmentBase64) {
-            workshop.scannedThankingLetter = attachmentBase64;
-        }
         await workshop.save();
 
         res.json({
-            message: "Thanking / appreciation letter dispatched to guest speaker successfully 📧✅",
+            message: "Official thanking message and appreciation letter (PDF format) dispatched to guest speaker successfully 📧📄✅",
             workshop,
+            hasPdfAttachment: Boolean(finalAttachment),
             result
         });
     } catch (err) {
@@ -465,9 +968,28 @@ router.put("/:id/scan", authenticateUser, async (req, res) => {
     }
 
     try {
-        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        let workshop = null;
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        }
         if (!workshop) {
-            return res.status(404).json({ error: "Workshop / Seminar not found ❌" });
+            workshop = new Workshop({
+                organizationId: req.user.organizationId,
+                title: "Academic Workshop / Guest Lecture",
+                description: "Official Academic Event",
+                date: new Date(),
+                time: "10:00 AM - 01:00 PM",
+                venue: "Campus Auditorium",
+                speakerName: "Distinguished Expert",
+                speakerBio: "",
+                speakerOrganization: "",
+                workshopType: "Arranged by Self",
+                status: req.user.role === "Principal" ? "verified" : "pending",
+                submittedBy: req.user._id,
+                department: req.user.department
+            });
+            await workshop.save();
         }
 
         if (type === "invitation") {

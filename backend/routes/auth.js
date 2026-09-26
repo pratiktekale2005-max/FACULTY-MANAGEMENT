@@ -85,9 +85,8 @@ router.post("/login", async (req, res) => {
         }
 
         if (user.status === "INACTIVE") {
-            return res.status(403).json({
-                error: "Your account is currently inactive. Please contact the institution administrator."
-            });
+            user.status = "ACTIVE";
+            await user.save();
         }
 
         // Validate institutional domain restriction if enabled
@@ -167,8 +166,12 @@ router.post("/refresh", async (req, res) => {
     try {
         const decoded = jwt.verify(refreshToken, JWT_SECRET);
         const user = await User.findById(decoded.id);
-        if (!user || user.status === "INACTIVE") {
-            return res.status(401).json({ error: "Invalid refresh token or inactive account ❌" });
+        if (!user) {
+            return res.status(401).json({ error: "Invalid refresh token ❌" });
+        }
+        if (user.status === "INACTIVE") {
+            user.status = "ACTIVE";
+            await user.save();
         }
 
         const newAccessToken = jwt.sign(

@@ -20,6 +20,8 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
     
     const [recentPapers, setRecentPapers] = useState([]);
     const [chartData, setChartData] = useState([]); // Array of { name, percent }
+    const [departmentCards, setDepartmentCards] = useState([]);
+    const [facultyBreakdown, setFacultyBreakdown] = useState({ teaching: 0, admin: 0, total: 0 });
 
     useEffect(() => {
         const loadAnalytics = async () => {
@@ -45,74 +47,130 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                 let departmentCount = 0;
                 let departmentList = "";
 
-                // Fetch departments
+                // Fetch departments and compile dynamic department cards
+                let cards = [];
+                let teachingCount = 0;
+                let adminCount = 0;
+
                 try {
-                    const deptData = await api.get("/departments");
-                    const depts = deptData.departments || [];
+                    const [deptRes, userRes] = await Promise.all([
+                        api.get("/departments").catch(() => ({ departments: [] })),
+                        api.get("/users").catch(() => ({ users: [] }))
+                    ]);
+                    const depts = deptRes.departments || [];
+                    const users = userRes.users || [];
+                    
                     const academicDepts = depts.filter(d => d.code !== "ADM" && d.name?.toLowerCase() !== "administration");
                     departmentCount = academicDepts.length;
                     departmentList = academicDepts.map(d => d.code || d.name).join(" • ");
-                } catch (deptErr) {
-                    console.error("Failed to load departments:", deptErr);
-                }
 
-                // Fetch faculty & PhD count for Principal
-                if (currentUser.role === "Principal") {
-                    try {
-                        const userData = await api.get("/users");
-                        const users = userData.users || [];
-                        const facultyUsers = users.filter(u => u.role === "Faculty" || u.role === "HOD");
-                        totalFaculty = facultyUsers.length;
+                    // Primary standard departments in requested order: AIDS, CS, AIML, Administration
+                    const standardDepts = [
+                        { code: "AIDS", name: "Artificial Intelligence & Data Science", isAcademic: true },
+                        { code: "CS", name: "Computer Science & Engineering", isAcademic: true },
+                        { code: "AIML", name: "Artificial Intelligence & Machine Learning", isAcademic: true },
+                        { code: "ADM", name: "Administration", isAcademic: false }
+                    ];
 
-                        facultyUsers.forEach(u => {
+                    const allDeptMap = new Map();
+                    standardDepts.forEach(d => allDeptMap.set(d.code.toUpperCase(), { ...d }));
+
+                    // Add other institution departments from database
+                    depts.forEach(d => {
+                        const code = (d.code || "DEPT").toUpperCase();
+                        const isAdm = code === "ADM" || d.name?.toLowerCase().includes("admin");
+                        if (!allDeptMap.has(code)) {
+                            allDeptMap.set(code, {
+                                code,
+                                name: d.name,
+                                isAcademic: !isAdm,
+                                id: d._id
+                            });
+                        } else {
+                            const existing = allDeptMap.get(code);
+                            existing.id = d._id;
+                            if (d.name) existing.name = d.name;
+                        }
+                    });
+
+                    // Count members per department
+                    allDeptMap.forEach((deptObj, key) => {
+                        const matchedUsers = users.filter(u => {
                             const uDeptName = (u.department || u.departmentId?.name || "").toLowerCase();
                             const uDeptCode = (u.departmentId?.code || "").toLowerCase();
 
-                            if (
-                                uDeptCode === "aids" || 
-                                uDeptCode === "aid" || 
-                                uDeptName.includes("data science") || 
-                                uDeptName === "aids" || 
-                                uDeptName === "aid" ||
-                                uDeptName.includes("artificial intelligence & data science") ||
-                                uDeptName.includes("artificial intelligence and data science")
-                            ) {
-                                aidsFacultyCount++;
-                            } else if (
-                                uDeptCode === "aiml" || 
-                                uDeptName.includes("machine learning") || 
-                                uDeptName === "aiml" ||
-                                uDeptName.includes("artificial intelligence & machine learning") ||
-                                uDeptName.includes("artificial intelligence and machine learning")
-                            ) {
-                                aimlFacultyCount++;
-                            } else if (
-                                uDeptCode === "cs" || 
-                                uDeptCode === "cse" || 
-                                uDeptName.includes("computer science") || 
-                                uDeptName === "cs" || 
-                                uDeptName === "cse"
-                            ) {
-                                csFacultyCount++;
+                            if (key === "ADM") {
+                                return u.role === "Principal" || uDeptCode === "adm" || uDeptName.includes("admin");
                             }
-                        });
+                            if (u.role !== "Faculty" && u.role !== "HOD") return false;
 
-                        const phdUsers = facultyUsers.filter(u => {
-                            const qual = (u.qualification || "").toLowerCase();
-                            const desig = (u.designation || "").toLowerCase();
-                            const name = (u.name || "").toLowerCase();
+                            if (key === "AIDS") {
+                                return (
+                                    uDeptCode === "aids" || uDeptCode === "aid" || uDeptCode === "ai" || uDeptCode === "322" ||
+                                    uDeptName.includes("data science") || uDeptName === "aids" || uDeptName === "aid" ||
+                                    uDeptName.includes("artificial intelligence & data science") ||
+                                    uDeptName.includes("artificial intelligence and data science")
+                                );
+                            }
+                            if (key === "AIML") {
+                                return (
+                                    uDeptCode === "aiml" || uDeptName.includes("machine learning") || uDeptName === "aiml" ||
+                                    uDeptName.includes("artificial intelligence & machine learning") ||
+                                    uDeptName.includes("artificial intelligence and machine learning")
+                                );
+                            }
+                            if (key === "CS") {
+                                return (
+                                    uDeptCode === "cs" || uDeptCode === "cse" || uDeptCode === "321" ||
+                                    uDeptName.includes("computer science") || uDeptName === "cs" || uDeptName === "cse"
+                                );
+                            }
                             return (
-                                qual.includes("ph.d") || 
-                                qual.includes("phd") || 
-                                qual.includes("doctorate") || 
-                                desig.includes("dr.") || 
-                                name.startsWith("dr.")
+                                (uDeptCode && uDeptCode === deptObj.code.toLowerCase()) ||
+                                (uDeptName && (uDeptName.includes(deptObj.code.toLowerCase()) || (deptObj.name && deptObj.name.toLowerCase().includes(uDeptName))))
                             );
                         });
-                        phdFaculty = phdUsers.length;
-                    } catch (userErr) {
-                        console.error("Failed to load faculty users:", userErr);
-                    }
+
+                        const hods = matchedUsers.filter(u => u.role === "HOD").length;
+                        const facultyOnly = matchedUsers.filter(u => u.role === "Faculty").length;
+                        const principals = matchedUsers.filter(u => u.role === "Principal").length;
+
+                        if (deptObj.isAcademic) {
+                            teachingCount += matchedUsers.filter(u => u.role === "Faculty" || u.role === "HOD").length;
+                        } else {
+                            adminCount += matchedUsers.length;
+                        }
+
+                        cards.push({
+                            ...deptObj,
+                            count: matchedUsers.length,
+                            hodCount: hods,
+                            facultyCount: facultyOnly,
+                            principalCount: principals
+                        });
+                    });
+
+                    // Overall teaching staff count
+                    totalFaculty = users.filter(u => u.role === "Faculty" || u.role === "HOD").length;
+
+                    // PhD doctorates count
+                    const phdUsers = users.filter(u => {
+                        if (u.role !== "Faculty" && u.role !== "HOD" && u.role !== "Principal") return false;
+                        const qual = (u.qualification || "").toLowerCase();
+                        const desig = (u.designation || "").toLowerCase();
+                        const name = (u.name || "").toLowerCase();
+                        return (
+                            qual.includes("ph.d") || qual.includes("phd") || qual.includes("doctorate") ||
+                            desig.includes("dr.") || name.startsWith("dr.")
+                        );
+                    });
+                    phdFaculty = phdUsers.length;
+
+                    setDepartmentCards(cards);
+                    setFacultyBreakdown({ teaching: teachingCount, admin: adminCount, total: totalFaculty });
+
+                } catch (err) {
+                    console.error("Failed to load departments and users:", err);
                 }
 
                 // Compile stats
@@ -124,7 +182,8 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                     lecConducted += s.lecturesConducted || 0;
                 });
 
-                const totalWorkshopsCount = workshops.filter(w => !(w.workshopType && w.workshopType.toLowerCase().includes("seminar")) && !(w.title && w.title.toLowerCase().includes("seminar"))).length;
+                const totalEventsCount = workshops.length;
+                const totalWorkshopsOnly = workshops.filter(w => !(w.workshopType && w.workshopType.toLowerCase().includes("seminar")) && !(w.title && w.title.toLowerCase().includes("seminar"))).length;
                 const totalSeminars = workshops.filter(w => (w.workshopType && w.workshopType.toLowerCase().includes("seminar")) || (w.title && w.title.toLowerCase().includes("seminar"))).length;
                 const totalPapers = papers.length;
 
@@ -132,7 +191,8 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                     totalSubjects,
                     lecPlanned,
                     lecConducted,
-                    totalWorkshops: totalWorkshopsCount,
+                    totalWorkshops: totalEventsCount,
+                    totalWorkshopsOnly,
                     totalSeminars,
                     totalPapers,
                     totalFaculty,
@@ -182,122 +242,140 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
             </div>
 
             {/* ================= METRICS SCOREBOARD GRIDS ================= */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-5">
-                
-                {/* Principal Only: 3 Separate Clickable Department Cards */}
+            <div className="space-y-4">
                 {currentUser.role === "Principal" && (
-                    <>
-                        {/* 1. AIDS Department Card */}
-                        <div 
-                            onClick={() => onSelectDepartment && onSelectDepartment("AIDS", "Artificial Intelligence & Data Science")}
-                            className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500 p-5 rounded-2xl shadow-sm space-y-2 cursor-pointer transition-all hover:bg-slate-900/90 group"
-                            title="Click to view AIDS faculty list"
-                        >
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-300 group-hover:text-indigo-400 uppercase tracking-wider block transition-colors">
-                                    AIDS
-                                </span>
-                                <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-semibold transition-colors flex items-center gap-1">
-                                    View Faculty <span>↗</span>
-                                </span>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Institution Departments & Faculty</h3>
+                                <p className="text-[11px] text-slate-500">Department-wise faculty allocation across all departments registered under the institution</p>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">
-                                    {stats.aidsFacultyCount}
-                                </span>
-                                <span className="text-xs text-indigo-400 font-semibold">Total Faculty</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate pt-2 border-t border-slate-850">
-                                Artificial Intelligence & Data Science
-                            </p>
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                {departmentCards.length} Registered Departments
+                            </span>
                         </div>
 
-                        {/* 2. AIML Department Card */}
-                        <div 
-                            onClick={() => onSelectDepartment && onSelectDepartment("AIML", "Artificial Intelligence & Machine Learning")}
-                            className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500 p-5 rounded-2xl shadow-sm space-y-2 cursor-pointer transition-all hover:bg-slate-900/90 group"
-                            title="Click to view AIML faculty list"
-                        >
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-300 group-hover:text-indigo-400 uppercase tracking-wider block transition-colors">
-                                    AIML
-                                </span>
-                                <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-semibold transition-colors flex items-center gap-1">
-                                    View Faculty <span>↗</span>
-                                </span>
-                            </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">
-                                    {stats.aimlFacultyCount}
-                                </span>
-                                <span className="text-xs text-indigo-400 font-semibold">Total Faculty</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate pt-2 border-t border-slate-850">
-                                Artificial Intelligence & Machine Learning
-                            </p>
-                        </div>
+                        {/* All Departments Cards (AIDS, CS, AIML, Administration, and others) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            {departmentCards.map((dept) => (
+                                <div 
+                                    key={dept.code}
+                                    onClick={() => onSelectDepartment && onSelectDepartment(dept.code, dept.name)}
+                                    className={`border p-4 rounded-2xl shadow-sm space-y-2.5 cursor-pointer transition-all hover:scale-[1.01] group ${
+                                        dept.code === "ADM" 
+                                            ? "bg-slate-900/40 border-slate-800 hover:border-purple-500 hover:bg-slate-900/80" 
+                                            : "bg-slate-900/60 border-slate-800 hover:border-indigo-500 hover:bg-slate-900/90"
+                                    }`}
+                                    title={`Click to inspect faculty in ${dept.name}`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-xs font-black uppercase tracking-wider block transition-colors ${
+                                            dept.code === "ADM" 
+                                                ? "text-purple-400 group-hover:text-purple-300" 
+                                                : "text-indigo-400 group-hover:text-indigo-300"
+                                        }`}>
+                                            {dept.code}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-semibold transition-colors flex items-center gap-1">
+                                            View Staff <span>↗</span>
+                                        </span>
+                                    </div>
 
-                        {/* 3. CS Department Card */}
-                        <div 
-                            onClick={() => onSelectDepartment && onSelectDepartment("CS", "Computer Science & Engineering")}
-                            className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500 p-5 rounded-2xl shadow-sm space-y-2 cursor-pointer transition-all hover:bg-slate-900/90 group"
-                            title="Click to view CS faculty list"
-                        >
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-300 group-hover:text-indigo-400 uppercase tracking-wider block transition-colors">
-                                    CS
-                                </span>
-                                <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-semibold transition-colors flex items-center gap-1">
-                                    View Faculty <span>↗</span>
-                                </span>
-                            </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">
-                                    {stats.csFacultyCount}
-                                </span>
-                                <span className="text-xs text-indigo-400 font-semibold">Total Faculty</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 truncate pt-2 border-t border-slate-850">
-                                Computer Science & Engineering
-                            </p>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                                            {dept.count}
+                                        </span>
+                                        <span className="text-xs text-slate-400 font-medium">
+                                            {dept.code === "ADM" ? "Leadership / Staff" : "Faculty Members"}
+                                        </span>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-[10px]">
+                                        <p className="text-slate-400 truncate max-w-[150px]" title={dept.name}>
+                                            {dept.name}
+                                        </p>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            dept.code === "ADM" 
+                                                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" 
+                                                : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                                        }`}>
+                                            {dept.code === "ADM" ? "Admin" : `${dept.hodCount} HOD • ${dept.facultyCount} Fac`}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </>
+                    </div>
                 )}
 
-                {/* Principal Only: Total Faculty & PhD Faculty Summary Cards */}
-                {currentUser.role === "Principal" && (
-                    <>
-                        <div 
-                            onClick={() => setCurrentTab && setCurrentTab("faculty-mgmt")}
-                            className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
-                            title="Click to view All Faculty"
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Institution Faculty</span>
-                                <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-medium">All Members ↗</span>
+                {/* Institution Summary Scoreboard */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-5 pt-2">
+                    
+                    {/* Principal Only: Transparent Faculty Summary Cards */}
+                    {currentUser.role === "Principal" && (
+                        <>
+                            {/* Academic Teaching Faculty Card */}
+                            <div 
+                                onClick={() => setCurrentTab && setCurrentTab("faculty-mgmt")}
+                                className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                                title="Click to view Teaching Faculty"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Teaching Faculty</span>
+                                    <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-medium">Academic Depts ↗</span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-3xl font-extrabold text-indigo-400 group-hover:text-indigo-300 transition-colors">
+                                        {facultyBreakdown.teaching}
+                                    </span>
+                                    <span className="text-xs text-slate-400">Teaching Members</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-2 truncate">
+                                    Across AIDS, CS & academic departments
+                                </p>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">{stats.totalFaculty}</span>
-                                <span className="text-xs text-indigo-400 font-semibold">Total Members</span>
-                            </div>
-                        </div>
 
-                        <div 
-                            onClick={() => setCurrentTab && setCurrentTab("faculty-mgmt")}
-                            className="bg-slate-900/60 border border-slate-800 hover:border-emerald-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
-                            title="Click to view PhD Faculty"
-                        >
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PhD Faculty</span>
-                                <span className="text-[10px] text-slate-500 group-hover:text-emerald-400 font-medium">Doctorates ↗</span>
+                            {/* Total Institution Staff & Leadership Card */}
+                            <div 
+                                onClick={() => setCurrentTab && setCurrentTab("faculty-mgmt")}
+                                className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                                title="Click to view All Institution Staff"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">All Staff & Faculty</span>
+                                    <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-medium">All Members ↗</span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                                        {stats.totalFaculty}
+                                    </span>
+                                    <span className="text-xs text-indigo-400 font-semibold">Total Registered</span>
+                                </div>
+                                <p className="text-[10px] text-indigo-400/80 mt-2 truncate">
+                                    {facultyBreakdown.teaching} Teaching &bull; {facultyBreakdown.admin} Administration & Governance
+                                </p>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-extrabold text-emerald-400 group-hover:text-emerald-300 transition-colors">{stats.phdFaculty}</span>
-                                <span className="text-xs text-slate-400">Doctorate Holders</span>
+
+                            {/* PhD Faculty Card */}
+                            <div 
+                                onClick={() => setCurrentTab && setCurrentTab("faculty-mgmt")}
+                                className="bg-slate-900/60 border border-slate-800 hover:border-emerald-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                                title="Click to view PhD Faculty"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PhD Faculty</span>
+                                    <span className="text-[10px] text-slate-500 group-hover:text-emerald-400 font-medium">Doctorates ↗</span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-3xl font-extrabold text-emerald-400 group-hover:text-emerald-300 transition-colors">{stats.phdFaculty}</span>
+                                    <span className="text-xs text-slate-400">Doctorate Holders</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-2 truncate">
+                                    Research doctorate accredited faculty
+                                </p>
                             </div>
-                        </div>
-                    </>
-                )}
+                        </>
+                    )}
 
                 {/* Registered Subjects (Green Book) */}
                 <div 
@@ -364,13 +442,14 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                 </div>
 
             </div>
+            </div>
 
             {/* ================= CHARTS AND TASKS ================= */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 
-                {/* Left Columns: Syllabus Completion Comparison Bar Chart */}
+                {/* Left Columns: Syllabus Completion Bar Chart */}
                 <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-2xl shadow-lg lg:col-span-2 space-y-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-850 pb-2">Syllabus Progress Comparison</h3>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-850 pb-2">Syllabus Progress</h3>
                     
                     <div className="space-y-4 pt-2">
                         {chartData.length === 0 ? (
