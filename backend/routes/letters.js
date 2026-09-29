@@ -75,7 +75,11 @@ router.get("/", authenticateUser, async (req, res) => {
         const { role, _id: userId, department } = req.user;
         let query = {};
 
-        // Role-based visibility
+        // Role-based visibility (Faculty access restricted per Requirement #5)
+        if (role === "Faculty") {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot access official letters ❌" });
+        }
+
         if (role === "Principal" || role === "Admin") {
             // Principal can view all letters across the institution
             if (req.query.department) {
@@ -84,9 +88,6 @@ router.get("/", authenticateUser, async (req, res) => {
         } else if (role === "HOD") {
             // HOD can view all letters within their department
             query["sender.department"] = department;
-        } else {
-            // Faculty can view letters they created
-            query["sender.userId"] = userId;
         }
 
         if (req.query.letterType) {
@@ -108,6 +109,9 @@ router.get("/", authenticateUser, async (req, res) => {
 router.post("/preview-pdf", authenticateUser, async (req, res) => {
     try {
         const user = req.user;
+        if (user.role === "Faculty") {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot preview official letters ❌" });
+        }
         const letterData = req.body;
 
         // Strictly bind sender details to authenticated user (Prevent impersonation - Section 12)
@@ -143,6 +147,9 @@ router.post("/preview-pdf", authenticateUser, async (req, res) => {
 router.post("/generate", authenticateUser, async (req, res) => {
     try {
         const user = req.user;
+        if (user.role === "Faculty") {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot generate official letters ❌" });
+        }
         const {
             letterType = "invitation",
             subject = "",
@@ -237,6 +244,9 @@ router.post("/:id/send", authenticateUser, async (req, res) => {
 
         // Verify permissions
         const user = req.user;
+        if (user.role === "Faculty") {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot dispatch official letters ❌" });
+        }
         const isCreator = String(letter.sender.userId) === String(user._id);
         const isPrincipal = user.role === "Principal";
         const isDeptHOD = user.role === "HOD" && user.department === letter.sender.department;

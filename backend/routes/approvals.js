@@ -86,6 +86,11 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
             return res.status(403).json({ error: "Forbidden: You cannot review other departments' approvals ❌" });
         }
 
+        // Restrict Principal from Workshop Approvals (Requirement #1)
+        if (req.user.role === "Principal" && approval.entityType === "WORKSHOP") {
+            return res.status(403).json({ error: "Access Denied: Principal does not have workshop approval authorization ❌" });
+        }
+
         const prevStatus = approval.status;
         let nextStatus = approval.status;
         let nextLevel = approval.currentLevel;

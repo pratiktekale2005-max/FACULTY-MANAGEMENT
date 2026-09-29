@@ -1,0 +1,10 @@
+{
+  "name": "faculty-management-suite",
+  "version": "1.0.0",
+  "description": "Faculty Activity & Management System",
+  "scripts": {
+    "setup": "npm install --prefix backend && npm install --prefix backend/frontend",
+    "dev": "npm run dev:all --prefix backend",
+    "start": "npm run dev:all --prefix backend"
+  }
+}

@@ -200,7 +200,9 @@ function ApprovalCenter({ currentUser }) {
                             </div>
 
                             {/* Actions Form */}
-                            {(currentUser.role === "Principal" || currentUser.role === "HOD") && selectedApp.currentLevel === currentUser.role && (
+                            {(currentUser.role === "Principal" || currentUser.role === "HOD") && 
+                             selectedApp.currentLevel === currentUser.role && 
+                             !(currentUser.role === "Principal" && selectedApp.entityType === "WORKSHOP") && (
                                 <div className="space-y-3 border-t border-slate-850 pt-4">
                                     <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider block">Decision Actions</span>
                                     

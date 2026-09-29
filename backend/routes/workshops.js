@@ -267,8 +267,8 @@ router.delete("/:id", authenticateUser, async (req, res) => {
     }
 });
 
-// ================= APPROVE/REJECT WORKSHOP (PRINCIPAL ONLY) =================
-router.put("/:id/status", requireRole(["Principal", "HOD"]), async (req, res) => {
+// ================= APPROVE/REJECT WORKSHOP (HOD ONLY) =================
+router.put("/:id/status", requireRole(["HOD"]), async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // status: 'verified' | 'rejected'
 

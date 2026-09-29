@@ -11,8 +11,14 @@ export default function WorkshopLetterModal({
     onClose,
     onUpdated
 }) {
-    const [letterType, setLetterType] = useState(initialType);
-    const [activeStep, setActiveStep] = useState(initialStep);
+    const [letterType, setLetterType] = useState(() => {
+        if (currentUser?.role === "Faculty" && initialType === "official") return "invitation";
+        return initialType;
+    });
+    const [activeStep, setActiveStep] = useState(() => {
+        if (currentUser?.role === "Principal") return "view";
+        return initialStep;
+    });
     const [currentWorkshop, setCurrentWorkshop] = useState(workshop || (workshopsList && workshopsList[0]) || {});
 
     // Institutional Letter Fields (Fixed Official Format)
@@ -437,13 +443,15 @@ export default function WorkshopLetterModal({
                     <div className="flex items-center space-x-2">
                         {/* Letter Type Switcher */}
                         <div className="inline-flex bg-slate-800 p-1 rounded-lg border border-slate-700 text-xs font-semibold">
-                            <button
-                                type="button"
-                                onClick={() => setLetterType("official")}
-                                className={`px-3 py-1.5 rounded-md transition ${letterType === "official" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
-                            >
-                                🏛️ Official Letter
-                            </button>
+                            {currentUser?.role !== "Faculty" && (
+                                <button
+                                    type="button"
+                                    onClick={() => setLetterType("official")}
+                                    className={`px-3 py-1.5 rounded-md transition ${letterType === "official" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
+                                >
+                                    🏛️ Official Letter
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setLetterType("invitation")}
@@ -474,13 +482,16 @@ export default function WorkshopLetterModal({
 
                 {/* 4-Step Navigation Tabs */}
                 <div className="bg-slate-950/60 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between shrink-0">
-                    <div className="grid grid-cols-4 gap-2 w-full max-w-2xl">
-                        {[
-                            { id: "generate", label: "1. Generate", icon: "✍️", desc: "Customize Fields" },
-                            { id: "view", label: "2. View Letter", icon: "👁️", desc: "Letterhead Preview" },
-                            { id: "scan", label: "3. Scan Copy", icon: "📷", desc: "Camera / Upload" },
-                            { id: "send", label: "4. Send Email", icon: "🚀", desc: "Dispatch Email" },
-                        ].map(step => (
+                    <div className={`grid ${currentUser?.role === "Principal" ? "grid-cols-1" : "grid-cols-4"} gap-2 w-full max-w-2xl`}>
+                        {(currentUser?.role === "Principal"
+                            ? [{ id: "view", label: "View Official Document", icon: "👁️", desc: "Letterhead Preview & Download" }]
+                            : [
+                                { id: "generate", label: "1. Generate", icon: "✍️", desc: "Customize Fields" },
+                                { id: "view", label: "2. View Letter", icon: "👁️", desc: "Letterhead Preview" },
+                                { id: "scan", label: "3. Scan Copy", icon: "📷", desc: "Camera / Upload" },
+                                { id: "send", label: "4. Send Email", icon: "🚀", desc: "Dispatch Email" },
+                            ]
+                        ).map(step => (
                             <button
                                 key={step.id}
                                 onClick={() => setActiveStep(step.id)}
@@ -740,13 +751,15 @@ export default function WorkshopLetterModal({
                                     >
                                         <span>Print</span>
                                     </button>
-                                    <button
-                                        onClick={() => setActiveStep("scan")}
-                                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1"
-                                    >
-                                        <span>Proceed to Scan</span>
-                                        <span>&rarr;</span>
-                                    </button>
+                                    {currentUser?.role !== "Principal" && (
+                                        <button
+                                            onClick={() => setActiveStep("scan")}
+                                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition flex items-center space-x-1"
+                                        >
+                                            <span>Proceed to Scan</span>
+                                            <span>&rarr;</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

@@ -6,7 +6,6 @@ import PapersPanel from "../components/PapersPanel";
 import ReportGeneratorPanel from "../components/ReportGeneratorPanel";
 import AnalyticsPanel from "../components/AnalyticsPanel";
 import StudentManagement from "../components/StudentManagement";
-import StudentFeedback from "../components/StudentFeedback";
 import InvitationsLetters from "../components/InvitationsLetters";
 import HODDashboard from "../components/HODDashboard";
 import ApprovalCenter from "../components/ApprovalCenter";
@@ -133,7 +132,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
             case "faculty-performance": return "Faculty Performance Scorecard";
             case "tasks": return "Assign & Track Tasks";
             case "greenbook": return "Green Book (Academic Tracker)";
-            case "workshops": return currentUser.role === "Principal" || currentUser.role === "HOD" ? "Workshop Approvals Queue" : "My Workshops & Seminars";
+            case "workshops": return currentUser.role === "HOD" ? "Workshop Approvals Queue" : "Workshops & Seminars";
             case "approvals": return currentUser.role === "Principal" || currentUser.role === "HOD" ? "Approvals Center Queue" : "My Submission Approvals";
             case "activities": return "Other Activities Portfolio";
             case "papers": return "Research Papers & Publications";
@@ -248,13 +247,6 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                 </div>
 
                                 <div>
-                                    {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Performance</p>}
-                                    <div className="space-y-1">
-                                        {renderNavButton("faculty-performance", "📈", "Faculty Performance")}
-                                    </div>
-                                </div>
-
-                                <div>
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Approvals</p>}
                                     <div className="space-y-1">
                                         {renderNavButton("approvals", "🔔", "Pending Approvals")}
@@ -306,12 +298,11 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                     <div className="space-y-1">
                                         {currentUser.role === "Principal" && renderNavButton("faculty", "👥", "Faculty Directory")}
                                         {renderNavButton("greenbook", "📖", "Green Book Tracker")}
-                                        {renderNavButton("workshops", "🎤", currentUser.role === "Principal" ? "Workshop Approvals" : "Workshops & Seminars")}
+                                        {renderNavButton("workshops", "🎤", "Workshops & Seminars")}
                                         {renderNavButton("approvals", "🔔", currentUser.role === "Principal" ? "Approvals Queue" : "My Submissions")}
                                         {currentUser.role === "Faculty" && renderNavButton("activities", "🎯", "Other Activities")}
                                         {renderNavButton("students", "👥", "Student Details")}
-                                        {renderNavButton("feedback", "⭐", "Survey Feedbacks")}
-                                        {renderNavButton("invitations", "✉️", "Official Letters")}
+                                        {currentUser.role !== "Faculty" && renderNavButton("invitations", "✉️", "Official Letters")}
                                     </div>
                                 </div>
 
@@ -598,9 +589,16 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
 
                             {/* FACULTY PERFORMANCE SCOREBOARD VIEW */}
                             {currentTab === "faculty-performance" && (
-                                <FacultyPerformance 
-                                    currentUser={currentUser} 
-                                />
+                                currentUser.role === "HOD" ? (
+                                    <div className="bg-[#101622] border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                        <h3 className="text-base font-bold text-slate-200 mb-2">Access Denied</h3>
+                                        <p className="text-xs">Department Faculty Scoreboard is restricted for HOD accounts.</p>
+                                    </div>
+                                ) : (
+                                    <FacultyPerformance 
+                                        currentUser={currentUser} 
+                                    />
+                                )
                             )}
 
                             {/* TASKS VIEW */}
@@ -668,16 +666,24 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                 />
                             )}
 
-                            {/* STUDENT FEEDBACK VIEW */}
+                            {/* STUDENT FEEDBACK VIEW (REMOVED PER REQ #3) */}
                             {currentTab === "feedback" && (
-                                <StudentFeedback 
-                                    currentUser={currentUser} 
-                                />
+                                <div className="bg-[#101622] border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                    <h3 className="text-base font-bold text-slate-200 mb-2">Module Unavailable</h3>
+                                    <p className="text-xs">Survey Feedback has been removed from this system.</p>
+                                </div>
                             )}
 
                             {/* INVITATION & LETTERS VIEW */}
                             {currentTab === "invitations" && (
-                                <InvitationsLetters currentUser={currentUser} />
+                                currentUser.role === "Faculty" ? (
+                                    <div className="bg-[#101622] border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
+                                        <h3 className="text-base font-bold text-slate-200 mb-2">Access Denied</h3>
+                                        <p className="text-xs">Official Letters module is not accessible from Faculty accounts.</p>
+                                    </div>
+                                ) : (
+                                    <InvitationsLetters currentUser={currentUser} />
+                                )
                             )}
 
                             {/* COLLEGE SETTINGS VIEW */}

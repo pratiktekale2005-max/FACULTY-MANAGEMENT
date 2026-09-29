@@ -536,45 +536,49 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
-                    <button
-                        type="button"
-                        onClick={() => openLetterModal(null, "official", "generate")}
-                        className="px-3.5 py-2 text-xs font-bold text-blue-200 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
-                        title="Generate, Preview, Scan, or Send official Institutional Letter"
-                    >
-                        <span>🏛️ Official Letter</span>
-                    </button>
+                {currentUser?.role !== "Principal" && (
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        {currentUser?.role !== "Faculty" && (
+                            <button
+                                type="button"
+                                onClick={() => openLetterModal(null, "official", "generate")}
+                                className="px-3.5 py-2 text-xs font-bold text-blue-200 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
+                                title="Generate, Preview, Scan, or Send official Institutional Letter"
+                            >
+                                <span>🏛️ Official Letter</span>
+                            </button>
+                        )}
 
-                    <button
-                        type="button"
-                        onClick={() => openLetterModal(null, "invitation", "generate")}
-                        className="px-3.5 py-2 text-xs font-bold text-indigo-200 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
-                        title="Generate, Preview, Scan, or Send official Invitation Letter"
-                    >
-                        <span>✉️ Invitation Letter</span>
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => openLetterModal(null, "invitation", "generate")}
+                            className="px-3.5 py-2 text-xs font-bold text-indigo-200 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
+                            title="Generate, Preview, Scan, or Send official Invitation Letter"
+                        >
+                            <span>✉️ Invitation Letter</span>
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => openLetterModal(null, "thanking", "generate")}
-                        className="px-3.5 py-2 text-xs font-bold text-emerald-200 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
-                        title="Generate, Preview, Scan, or Send official Thanking / Appreciation Letter"
-                    >
-                        <span>🤝 Thanking Letter</span>
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => openLetterModal(null, "thanking", "generate")}
+                            className="px-3.5 py-2 text-xs font-bold text-emerald-200 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
+                            title="Generate, Preview, Scan, or Send official Thanking / Appreciation Letter"
+                        >
+                            <span>🤝 Thanking Letter</span>
+                        </button>
 
-                    <button
-                        type="button"
-                        onClick={() => {
-                            resetForm();
-                            setShowAddModal(true);
-                        }}
-                        className="px-4 py-2 text-xs font-semibold text-white bg-indigo-650 hover:bg-indigo-600 rounded-xl transition-all shadow-md flex items-center space-x-1.5 cursor-pointer"
-                    >
-                        <span>➕ Register Workshop</span>
-                    </button>
-                </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                resetForm();
+                                setShowAddModal(true);
+                            }}
+                            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-650 hover:bg-indigo-600 rounded-xl transition-all shadow-md flex items-center space-x-1.5 cursor-pointer"
+                        >
+                            <span>➕ Register Workshop</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ================= NAVIGATION TABS (WORKSHOPS vs REMUNERATION) ================= */}
@@ -646,43 +650,47 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                 <span className="text-3xl block mb-2">📂</span>
                                 <p className="text-sm font-semibold text-slate-200">No workshops or seminars match the selected filters.</p>
                                 <p className="text-xs text-slate-500 mt-1 mb-4">You can register a new event or generate official invitation and thanking letters below.</p>
-                                <div className="flex flex-wrap items-center justify-center gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => { resetForm(); setShowAddModal(true); }}
-                                        className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow transition cursor-pointer"
-                                    >
-                                        ➕ Register Event
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => openLetterModal(null, "official", "generate")}
-                                        className="px-3.5 py-1.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 text-blue-300 rounded-xl text-xs font-semibold transition cursor-pointer"
-                                    >
-                                        🏛️ Generate Official Letter
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => openLetterModal(null, "invitation", "generate")}
-                                        className="px-3.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 text-indigo-300 rounded-xl text-xs font-semibold transition cursor-pointer"
-                                    >
-                                        ✉️ Generate Invitation Letter
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => openLetterModal(null, "thanking", "generate")}
-                                        className="px-3.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 text-emerald-300 rounded-xl text-xs font-semibold transition cursor-pointer"
-                                    >
-                                        🤝 Generate Thanking Letter
-                                    </button>
-                                </div>
+                                {currentUser?.role !== "Principal" && (
+                                    <div className="flex flex-wrap items-center justify-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => { resetForm(); setShowAddModal(true); }}
+                                            className="px-3.5 py-1.5 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold shadow transition cursor-pointer"
+                                        >
+                                            ➕ Register Event
+                                        </button>
+                                        {currentUser?.role !== "Faculty" && (
+                                            <button
+                                                type="button"
+                                                onClick={() => openLetterModal(null, "official", "generate")}
+                                                className="px-3.5 py-1.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 text-blue-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                            >
+                                                🏛️ Generate Official Letter
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => openLetterModal(null, "invitation", "generate")}
+                                            className="px-3.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 text-indigo-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                        >
+                                            ✉️ Generate Invitation Letter
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => openLetterModal(null, "thanking", "generate")}
+                                            className="px-3.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/70 text-emerald-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                        >
+                                            🤝 Generate Thanking Letter
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             filteredWorkshops.map(w => {
                                 const isSeminar = (w.workshopType && w.workshopType.toLowerCase().includes("seminar")) || (w.title && w.title.toLowerCase().includes("seminar"));
                                 const isApproved = w.status === "verified" || w.status === "approved";
                                 const isOwner = currentUser.role === "Faculty" && String(w.submittedBy?._id || w.submittedBy) === String(currentUser.id || currentUser._id);
-                                const canApprove = currentUser.role === "Principal" || (currentUser.role === "HOD" && (!w.department || w.department === currentUser.department));
+                                const canApprove = currentUser.role === "HOD" && (!w.department || w.department === currentUser.department);
 
                                 return (
                                     <div 
@@ -758,162 +766,6 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                                 {w.speakerOrganization && <div className="text-indigo-300 text-[11px]">{w.speakerOrganization}</div>}
                                                 {w.guestEmail && <div className="text-slate-400 text-[11px]">✉️ {w.guestEmail}</div>}
                                                 {w.speakerBio && <div className="text-slate-400 text-[11px] pt-1 italic">{w.speakerBio}</div>}
-                                            </div>
-
-                                            {/* ================= 4-STEP LETTER WORKFLOW PANELS ================= */}
-                                            <div className="space-y-2.5 mb-4 bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
-                                                {/* OFFICIAL LETTER WORKFLOW */}
-                                                <div>
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
-                                                            <span>🏛️</span>
-                                                            <span>Official Letter:</span>
-                                                        </span>
-                                                        {w.officialLetterSentAt ? (
-                                                            <span className="text-[10px] text-emerald-400 font-medium">
-                                                                ✓ Sent {new Date(w.officialLetterSentAt).toLocaleDateString()}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] text-slate-500">Not Dispatched</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="grid grid-cols-4 gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "official", "generate")}
-                                                            className="px-2 py-1 bg-blue-950 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            ✍️ 1. Generate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "official", "view")}
-                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            👁️ 2. View
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "official", "scan")}
-                                                            className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
-                                                                w.scannedOfficialLetter
-                                                                    ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
-                                                                    : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
-                                                            }`}
-                                                        >
-                                                            📷 3. Scan {w.scannedOfficialLetter && "✓"}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "official", "send")}
-                                                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-bold text-center shadow transition"
-                                                        >
-                                                            🚀 4. Send
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* INVITATION LETTER WORKFLOW */}
-                                                <div className="border-t border-slate-850 pt-2">
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
-                                                            <span>✉️</span>
-                                                            <span>Invitation Letter:</span>
-                                                        </span>
-                                                        {w.invitationSentAt ? (
-                                                            <span className="text-[10px] text-emerald-400 font-medium">
-                                                                ✓ Sent {new Date(w.invitationSentAt).toLocaleDateString()}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] text-slate-500">Not Dispatched</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="grid grid-cols-4 gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "invitation", "generate")}
-                                                            className="px-2 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            ✍️ 1. Generate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "invitation", "view")}
-                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            👁️ 2. View
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "invitation", "scan")}
-                                                            className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
-                                                                w.scannedInvitation
-                                                                    ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
-                                                                    : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
-                                                            }`}
-                                                        >
-                                                            📷 3. Scan {w.scannedInvitation && "✓"}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "invitation", "send")}
-                                                            className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold text-center shadow transition"
-                                                        >
-                                                            🚀 4. Send
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* THANKING / APPRECIATION LETTER WORKFLOW */}
-                                                <div className="border-t border-slate-850 pt-2">
-                                                    <div className="flex items-center justify-between mb-1.5">
-                                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                                                            <span>🤝</span>
-                                                            <span>Thanking Letter:</span>
-                                                        </span>
-                                                        {w.thankingSentAt ? (
-                                                            <span className="text-[10px] text-emerald-400 font-medium">
-                                                                ✓ Sent {new Date(w.thankingSentAt).toLocaleDateString()}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] text-slate-500">Not Dispatched</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="grid grid-cols-4 gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "thanking", "generate")}
-                                                            className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            ✍️ 1. Generate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "thanking", "view")}
-                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
-                                                        >
-                                                            👁️ 2. View
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "thanking", "scan")}
-                                                            className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
-                                                                w.scannedThankingLetter
-                                                                    ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
-                                                                    : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
-                                                            }`}
-                                                        >
-                                                            📷 3. Scan {w.scannedThankingLetter && "✓"}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openLetterModal(w, "thanking", "send")}
-                                                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold text-center shadow transition"
-                                                        >
-                                                            🚀 4. Send
-                                                        </button>
-                                                    </div>
-                                                </div>
                                             </div>
                                         </div>
 
@@ -1009,73 +861,75 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                                         </span>
                                                     </div>
 
-                                                    <div className="space-y-2.5">
-                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                            <div>
-                                                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Evaluator / Participant</label>
-                                                                <input
-                                                                    type="text"
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                                                    placeholder="Name or Roll No"
-                                                                    value={fbName}
-                                                                    onChange={(e) => setFbName(e.target.value)}
-                                                                />
+                                                    {currentUser?.role !== "Principal" && (
+                                                        <div className="space-y-2.5">
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                <div>
+                                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Evaluator / Participant</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                                                        placeholder="Name or Roll No"
+                                                                        value={fbName}
+                                                                        onChange={(e) => setFbName(e.target.value)}
+                                                                    />
+                                                                </div>
+
+                                                                <div>
+                                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Assessment Criteria</label>
+                                                                    <select
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                                                        value={fbCriteria}
+                                                                        onChange={(e) => setFbCriteria(e.target.value)}
+                                                                    >
+                                                                        <option value="Content & Delivery">Content & Delivery</option>
+                                                                        <option value="Practical Hands-on">Practical Hands-on</option>
+                                                                        <option value="Speaker Interaction">Speaker Interaction</option>
+                                                                        <option value="Syllabus Relevance">Syllabus Relevance</option>
+                                                                        <option value="Overall Impact">Overall Impact</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div>
+                                                                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Post Score / Rating</label>
+                                                                    <select
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                                                        value={fbRating}
+                                                                        onChange={(e) => {
+                                                                            const val = Number(e.target.value);
+                                                                            setFbRating(val);
+                                                                            setFbScore(val);
+                                                                        }}
+                                                                    >
+                                                                        <option value={5}>⭐⭐⭐⭐⭐ 5/5 (Exemplary)</option>
+                                                                        <option value={4}>⭐⭐⭐⭐ 4/5 (Very Good)</option>
+                                                                        <option value={3}>⭐⭐⭐ 3/5 (Good)</option>
+                                                                        <option value={2}>⭐⭐ 2/5 (Satisfactory)</option>
+                                                                        <option value={1}>⭐ 1/5 (Needs Improvement)</option>
+                                                                    </select>
+                                                                </div>
                                                             </div>
 
-                                                            <div>
-                                                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Assessment Criteria</label>
-                                                                <select
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                                                    value={fbCriteria}
-                                                                    onChange={(e) => setFbCriteria(e.target.value)}
-                                                                >
-                                                                    <option value="Content & Delivery">Content & Delivery</option>
-                                                                    <option value="Practical Hands-on">Practical Hands-on</option>
-                                                                    <option value="Speaker Interaction">Speaker Interaction</option>
-                                                                    <option value="Syllabus Relevance">Syllabus Relevance</option>
-                                                                    <option value="Overall Impact">Overall Impact</option>
-                                                                </select>
-                                                            </div>
+                                                            <textarea
+                                                                rows="2"
+                                                                className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                                                placeholder="Post-Assessment remarks, student feedback, and evaluation observations..."
+                                                                value={fbComments}
+                                                                onChange={(e) => setFbComments(e.target.value)}
+                                                            />
 
-                                                            <div>
-                                                                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Post Score / Rating</label>
-                                                                <select
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                                                    value={fbRating}
-                                                                    onChange={(e) => {
-                                                                        const val = Number(e.target.value);
-                                                                        setFbRating(val);
-                                                                        setFbScore(val);
-                                                                    }}
+                                                            <div className="flex justify-end">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={submittingAssessment}
+                                                                    onClick={() => handleSubmitPostAssessment(w._id)}
+                                                                    className="px-4 py-1.5 bg-emerald-650 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow transition flex items-center gap-1.5"
                                                                 >
-                                                                    <option value={5}>⭐⭐⭐⭐⭐ 5/5 (Exemplary)</option>
-                                                                    <option value={4}>⭐⭐⭐⭐ 4/5 (Very Good)</option>
-                                                                    <option value={3}>⭐⭐⭐ 3/5 (Good)</option>
-                                                                    <option value={2}>⭐⭐ 2/5 (Satisfactory)</option>
-                                                                    <option value={1}>⭐ 1/5 (Needs Improvement)</option>
-                                                                </select>
+                                                                    <span>{submittingAssessment ? "Submitting..." : "📝 Submit Post Assessment"}</span>
+                                                                </button>
                                                             </div>
                                                         </div>
-
-                                                        <textarea
-                                                            rows="2"
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                                            placeholder="Post-Assessment remarks, student feedback, and evaluation observations..."
-                                                            value={fbComments}
-                                                            onChange={(e) => setFbComments(e.target.value)}
-                                                        />
-
-                                                        <div className="flex justify-end">
-                                                            <button
-                                                                type="button"
-                                                                disabled={submittingAssessment}
-                                                                onClick={() => handleSubmitPostAssessment(w._id)}
-                                                                className="px-4 py-1.5 bg-emerald-650 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow transition flex items-center gap-1.5"
-                                                            >
-                                                                <span>{submittingAssessment ? "Submitting..." : "📝 Submit Post Assessment"}</span>
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                                                    )}
 
                                                     {/* Existing Reviews & Evaluations List */}
                                                     <div className="space-y-1.5 border-t border-slate-800 pt-2.5 max-h-36 overflow-y-auto">
@@ -1141,7 +995,7 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </p>
                         </div>
 
-                        {selectedRemunWorkshop && (
+                        {selectedRemunWorkshop && currentUser?.role !== "Principal" && (
                             <button
                                 type="button"
                                 onClick={handleGenerateRemunerationPdf}
@@ -1372,13 +1226,15 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                         <span>📄 Preview Report</span>
                                     </button>
 
-                                    <button
-                                        type="submit"
-                                        disabled={savingRemun}
-                                        className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                        <span>{savingRemun ? "Saving..." : "💾 Save Remuneration Details"}</span>
-                                    </button>
+                                    {currentUser?.role !== "Principal" && (
+                                        <button
+                                            type="submit"
+                                            disabled={savingRemun}
+                                            className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span>{savingRemun ? "Saving..." : "💾 Save Remuneration Details"}</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </form>
