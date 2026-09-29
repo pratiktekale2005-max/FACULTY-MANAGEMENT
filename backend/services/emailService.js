@@ -257,7 +257,7 @@ const sendPasswordCredentialsEmail = async ({
     }
 };
 
-const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, time, venue, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64 }) => {
+const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, time, venue, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail }) => {
     const emailUser = process.env.EMAIL_USER;
     const emailPass = process.env.EMAIL_PASS;
 
@@ -311,12 +311,14 @@ const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventTyp
                 </p>
                 <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
                     <p style="margin: 0;">Warm regards,<br/><strong>${organizerName || "Head of Department & Event Committee"}</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
+                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #6366f1;">Sender Email: ${senderEmail}</p>` : ''}
                 </div>
             </div>
         `;
 
         const mailOptions = {
-            from: `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            from: organizerName ? `"${organizerName} via ${institutionName || "EduCRM Portal"}" <${emailUser}>` : `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            replyTo: senderEmail || emailUser,
             to: guestEmail,
             subject: `Official Academic Invitation: ${eventTitle} (${eventType || "Workshop"})`,
             html: customHtml || defaultHtml,
@@ -342,7 +344,7 @@ const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventTyp
     }
 };
 
-const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64 }) => {
+const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail }) => {
     const emailUser = process.env.EMAIL_USER;
     const emailPass = process.env.EMAIL_PASS;
 
@@ -395,12 +397,14 @@ const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType,
                 </p>
                 <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
                     <p style="margin: 0;">With sincere regards,<br/><strong>${organizerName || "Department Faculty"} & Principal</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
+                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #059669;">Sender Email: ${senderEmail}</p>` : ''}
                 </div>
             </div>
         `;
 
         const mailOptions = {
-            from: `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            from: organizerName ? `"${organizerName} via ${institutionName || "EduCRM Portal"}" <${emailUser}>` : `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
+            replyTo: senderEmail || emailUser,
             to: guestEmail,
             subject: `Letter of Gratitude & Appreciation: ${eventTitle}`,
             html: customHtml || defaultHtml,
@@ -558,8 +562,12 @@ const sendOfficialLetterEmail = async ({
         });
 
         const senderRole = sender.role || "Faculty";
-        const senderName = sender.name || "Faculty Member";
-        const senderDesignation = sender.designation || (senderRole === "HOD" ? "Head of Department" : (senderRole === "Principal" ? "Principal" : "Assistant Professor"));
+        const senderName = sender.name || (senderRole === "Principal" ? "Dr. Suresh Mali" : (senderRole === "HOD" ? "Dr. Adsul Mam" : "Faculty Member"));
+        const senderDesignation = senderRole === "Faculty"
+            ? "Faculty"
+            : senderRole === "HOD"
+                ? "Vice Principal / CE - HOD"
+                : (senderRole === "Principal" ? "Principal" : (sender.designation || "Faculty"));
         const senderDept = sender.department || "";
         const senderEmail = sender.email || emailUser;
         const institutionName = "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION";
@@ -583,6 +591,11 @@ const sendOfficialLetterEmail = async ({
                         <h1 style="margin: 3px 0 2px 0; font-size: 15px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.3px;">Dr. D. Y. PATIL COLLEGE OF ENGINEERING &amp; INNOVATION</h1>
                         <p style="margin: 0; font-size: 10px; font-weight: 600; color: #475569;">(An Autonomous Institute Affiliated to SPPU • NAAC 'A' Grade Accredited)</p>
                         <p style="margin: 3px 0 0 0; font-size: 9px; color: #64748b;">Varale Campus, Talegaon, Pune • Ph: 020 48522561 • www.dypcoei.edu.in</p>
+                        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0; font-size: 9.5px; color: #1e1b4b; display: flex; justify-content: space-between;">
+                            <span><strong>Dr. Adsul Mam</strong> (Vice Principal / CE - HOD)</span>
+                            <span style="float: right;"><strong>Dr. Suresh Mali</strong> (Principal)</span>
+                            <div style="clear: both;"></div>
+                        </div>
                     </div>
 
                     <!-- Reference Bar -->

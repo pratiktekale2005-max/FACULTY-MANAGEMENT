@@ -68,7 +68,26 @@ function drawFixedLetterhead(doc, topY = 40) {
     doc.moveTo(45, ruleY).lineTo(550, ruleY).lineWidth(1.2).strokeColor("#800000").stroke();
     doc.moveTo(45, ruleY + 2.5).lineTo(550, ruleY + 2.5).lineWidth(0.5).strokeColor("#1e1b4b").stroke();
 
-    return ruleY + 12;
+    // 5. Letter Pad Designation Information: Dr. Adsul Mam & Dr. Suresh Mali
+    doc.font("Helvetica-Bold")
+        .fontSize(7.5)
+        .fillColor("#1e1b4b")
+        .text("Dr. Adsul Mam", 45, ruleY + 5, { align: "left", width: 250 });
+    doc.font("Helvetica")
+        .fontSize(6.5)
+        .fillColor("#64748b")
+        .text("Vice Principal / CE - HOD", 45, ruleY + 14, { align: "left", width: 250 });
+
+    doc.font("Helvetica-Bold")
+        .fontSize(7.5)
+        .fillColor("#1e1b4b")
+        .text("Dr. Suresh Mali", 300, ruleY + 5, { align: "right", width: 250 });
+    doc.font("Helvetica")
+        .fontSize(6.5)
+        .fillColor("#64748b")
+        .text("Principal", 300, ruleY + 14, { align: "right", width: 250 });
+
+    return ruleY + 26;
 }
 
 /**
@@ -277,7 +296,7 @@ function generateOfficialLetterPdf(letterData = {}) {
                 ? "We eagerly look forward to receiving your favorable confirmation. Please feel free to communicate with us for any coordination, travel, or presentation requirements."
                 : (letterType === "thanking"
                     ? "Thank you once again for your valuable time and contribution to academic excellence."
-                    : "Kindly confirm your acceptance of this engagement by signing and returning a copy of this communication.");
+                    : "Kindly confirm receipt of this official letter for our institutional records.");
 
             doc.font("Helvetica")
                 .fontSize(9.5)
@@ -294,20 +313,20 @@ function generateOfficialLetterPdf(letterData = {}) {
                 // Faculty Coordinator
                 doc.moveTo(45, sigY).lineTo(45 + colW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
                 doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(senderRole === "Faculty" ? senderName : "Faculty Coordinator", 45, sigY + 5, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Event Coordinator", 45, sigY + 16, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text(senderDept, 45, sigY + 26, { width: colW, align: "center", ellipsis: true });
+                doc.font("Helvetica").fontSize(7.5).fillColor("#4338ca").text("Faculty", 45, sigY + 16, { width: colW, align: "center" });
+                doc.font("Helvetica").fontSize(7).fillColor("#64748b").text(senderDept ? `Dept. of ${senderDept}` : "Academic Dept.", 45, sigY + 26, { width: colW, align: "center", ellipsis: true });
 
-                // HOD
+                // HOD / Vice Principal
                 doc.moveTo(222, sigY).lineTo(222 + colW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-                doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(senderRole === "HOD" ? senderName : "Dr. Alpana Adsul", 222, sigY + 5, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Head of Department", 222, sigY + 16, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text(senderDept, 222, sigY + 26, { width: colW, align: "center", ellipsis: true });
+                doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text("Dr. Adsul Mam", 222, sigY + 5, { width: colW, align: "center" });
+                doc.font("Helvetica").fontSize(7.5).fillColor("#4338ca").text("Vice Principal / CE - HOD", 222, sigY + 16, { width: colW, align: "center" });
+                doc.font("Helvetica").fontSize(7).fillColor("#64748b").text(senderDept ? `Dept. of ${senderDept}` : "Academic Affairs", 222, sigY + 26, { width: colW, align: "center", ellipsis: true });
 
                 // Principal
                 doc.moveTo(395, sigY).lineTo(395 + colW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
                 doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text("Dr. Suresh Mali", 395, sigY + 5, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Principal", 395, sigY + 16, { width: colW, align: "center" });
-                doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text(MASTER_LETTERHEAD.collegeName, 395, sigY + 26, { width: colW, align: "center", ellipsis: true });
+                doc.font("Helvetica").fontSize(7.5).fillColor("#4338ca").text("Principal", 395, sigY + 16, { width: colW, align: "center" });
+                doc.font("Helvetica").fontSize(7).fillColor("#64748b").text(MASTER_LETTERHEAD.collegeName, 395, sigY + 26, { width: colW, align: "center", ellipsis: true });
             } else {
                 // Role-based single authorized sender signature block (Section 8 of prompt)
                 doc.font("Helvetica").fontSize(9.5).fillColor("#1e293b").text("Regards,", 350, sigY - 20);
@@ -317,15 +336,15 @@ function generateOfficialLetterPdf(letterData = {}) {
                 doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#0f172a").text(senderName, 350, sigY + 30);
                 
                 if (senderRole === "HOD") {
-                    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#4338ca").text("Head of Department", 350, sigY + 43);
+                    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#4338ca").text("Vice Principal / CE - HOD", 350, sigY + 43);
                     doc.font("Helvetica").fontSize(8).fillColor("#475569").text(`Department of ${senderDept}`, 350, sigY + 54);
                     doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text(MASTER_LETTERHEAD.collegeName, 350, sigY + 65, { width: 195 });
                 } else if (senderRole === "Principal") {
                     doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#4338ca").text("Principal", 350, sigY + 43);
                     doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text(MASTER_LETTERHEAD.collegeName, 350, sigY + 54, { width: 195 });
                 } else {
-                    doc.font("Helvetica").fontSize(8.5).fillColor("#475569").text(senderDesignation, 350, sigY + 43);
-                    doc.font("Helvetica").fontSize(8).fillColor("#475569").text(`Department of ${senderDept}`, 350, sigY + 54);
+                    doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#4338ca").text("Faculty", 350, sigY + 43);
+                    doc.font("Helvetica").fontSize(8).fillColor("#475569").text(senderDesignation && senderDesignation !== "Faculty" ? `${senderDesignation} • Dept. of ${senderDept}` : `Department of ${senderDept}`, 350, sigY + 54);
                     doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text(MASTER_LETTERHEAD.collegeName, 350, sigY + 65, { width: 195 });
                 }
             }
@@ -362,7 +381,7 @@ function generateWorkshopSummaryPdf(reportData = {}) {
                 speakerDesignation = "Senior Technical Consultant",
                 speakerOrganization = "Industry Enterprise",
                 facultyCoordinator = "Mr. Swami Panjala",
-                hodName = "Dr. Alpana Adsul",
+                hodName = "Dr. Adsul Mam",
                 principalName = "Dr. Suresh Mali",
                 objectives = [],
                 description = "",
@@ -567,11 +586,11 @@ function generateWorkshopSummaryPdf(reportData = {}) {
             doc.font("Helvetica").fontSize(8).fillColor("#64748b").text("Faculty Coordinator", 45, sigY + 17, { width: sigW, align: "center" });
             doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text(department, 45, sigY + 28, { width: sigW, align: "center", ellipsis: true });
 
-            // 2. HOD (Dr. Alpana Adsul)
+            // 2. HOD (Dr. Adsul Mam)
             doc.moveTo(222, sigY).lineTo(222 + sigW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-            doc.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a").text(hodName, 222, sigY + 5, { width: sigW, align: "center" });
-            doc.font("Helvetica").fontSize(8).fillColor("#64748b").text(`HOD (${department})`, 222, sigY + 17, { width: sigW, align: "center" });
-            doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text("Academic Head", 222, sigY + 28, { width: sigW, align: "center" });
+            doc.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a").text(hodName || "Dr. Adsul Mam", 222, sigY + 5, { width: sigW, align: "center" });
+            doc.font("Helvetica").fontSize(8).fillColor("#64748b").text("Vice Principal / CE - HOD", 222, sigY + 17, { width: sigW, align: "center" });
+            doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text(`Dept. of ${department}`, 222, sigY + 28, { width: sigW, align: "center" });
 
             // 3. Principal (Dr. Suresh Mali)
             doc.moveTo(395, sigY).lineTo(395 + sigW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
@@ -788,10 +807,10 @@ function generateRemunerationPdf(data = {}) {
             doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Organized By Faculty", 45, sigY + 16, { width: sigWidth, align: "center" });
             doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text("Event Facilitator", 45, sigY + 26, { width: sigWidth, align: "center" });
 
-            // Signature 2: HOD
+            // Signature 2: HOD / Vice Principal
             doc.moveTo(222, sigY).lineTo(222 + sigWidth, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-            doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(hodName, 222, sigY + 5, { width: sigWidth, align: "center" });
-            doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Head of Department", 222, sigY + 16, { width: sigWidth, align: "center" });
+            doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(hodName || "Dr. Adsul Mam", 222, sigY + 5, { width: sigWidth, align: "center" });
+            doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Vice Principal / CE - HOD", 222, sigY + 16, { width: sigWidth, align: "center" });
             doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text(departmentName, 222, sigY + 26, { width: sigWidth, align: "center", ellipsis: true });
 
             // Signature 3: Principal

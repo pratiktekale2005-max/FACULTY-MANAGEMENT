@@ -22,8 +22,10 @@ const workshopSchema = new mongoose.Schema({
     speakerResumePath: { type: String, default: "" },
     scannedInvitation: { type: String, default: "" }, // Base64 document / image
     scannedThankingLetter: { type: String, default: "" }, // Base64 document / image
+    scannedOfficialLetter: { type: String, default: "" }, // Base64 document / image
     invitationSentAt: { type: Date, default: null },
     thankingSentAt: { type: Date, default: null },
+    officialLetterSentAt: { type: Date, default: null },
     photos: [String],
     videos: [String],
     studentAttendance: [String],

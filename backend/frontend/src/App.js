@@ -6,6 +6,23 @@ import Onboarding from "./pages/Onboarding";
 function App() {
   const [step, setStep] = useState(1);
   const [user, setUser] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+
+  // Sync theme with document element and body
+  useEffect(() => {
+    if (theme === "light") {
+      document.documentElement.classList.add("light-theme");
+      document.body.classList.add("light-theme");
+    } else {
+      document.documentElement.classList.remove("light-theme");
+      document.body.classList.remove("light-theme");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === "dark" ? "light" : "dark"));
+  };
 
   const handleLoginSuccess = (userData, accessToken, refreshToken) => {
     setUser(userData);
@@ -41,6 +58,8 @@ function App() {
         <Login
           setStep={setStep}
           onLoginSuccess={handleLoginSuccess}
+          theme={theme}
+          toggleTheme={toggleTheme}
         />
       )}
 
@@ -48,6 +67,8 @@ function App() {
         <Dashboard
           currentUser={user}
           onLogout={handleLogout}
+          theme={theme}
+          toggleTheme={toggleTheme}
         />
       )}
 
@@ -55,6 +76,8 @@ function App() {
         <Onboarding
           setStep={setStep}
           onLoginSuccess={handleLoginSuccess}
+          theme={theme}
+          toggleTheme={toggleTheme}
         />
       )}
     </div>

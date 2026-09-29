@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { api } from "../services/api";
 
-function Login({ setStep, onLoginSuccess }) {
+function Login({ setStep, onLoginSuccess, theme = "dark", toggleTheme }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -63,7 +63,30 @@ function Login({ setStep, onLoginSuccess }) {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12">
+        <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 relative transition-colors duration-300">
+            {/* Top Right Theme Toggle */}
+            {toggleTheme && (
+                <div className="absolute top-5 right-5 z-20">
+                    <button
+                        type="button"
+                        onClick={toggleTheme}
+                        className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-slate-700/80 bg-slate-900/80 hover:bg-slate-800 text-xs font-semibold text-slate-200 shadow-lg backdrop-blur-md transition-all hover:scale-105 cursor-pointer"
+                        title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+                    >
+                        {theme === "dark" ? (
+                            <>
+                                <span className="text-amber-400 text-sm">☀️</span>
+                                <span>Light Mode</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="text-indigo-600 text-sm">🌙</span>
+                                <span className="text-slate-800">Dark Mode</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
             <div className="max-w-md w-full space-y-8 bg-slate-900/60 backdrop-blur-md p-8 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-violet-650 via-indigo-600 to-blue-600" style={{
                     background: branding ? `linear-gradient(to right, ${branding.primaryColor}, ${branding.secondaryColor})` : undefined

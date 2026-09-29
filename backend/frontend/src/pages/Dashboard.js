@@ -25,11 +25,12 @@ import FacultyDirectory from "../components/FacultyDirectory";
 import MyProfileView from "../components/MyProfileView";
 import { api } from "../services/api";
 
-function Dashboard({ currentUser, onLogout }) {
+function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propToggleTheme }) {
     const [currentTab, setCurrentTab] = useState("overview");
     const [selectedDepartment, setSelectedDepartment] = useState(null); // { code: "AID", name: "..." }
     const [selectedFacultyProfile, setSelectedFacultyProfile] = useState(null); // faculty object or ID
-    const [theme, setTheme] = useState("dark");
+    const [internalTheme, setInternalTheme] = useState(() => localStorage.getItem("theme") || "dark");
+    const theme = propTheme || internalTheme;
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [notifications, setNotifications] = useState([]);
@@ -43,39 +44,39 @@ function Dashboard({ currentUser, onLogout }) {
 
     // Sync theme preferences and sidebar collapse preferences
     useEffect(() => {
-        const savedTheme = localStorage.getItem("theme") || "dark";
-        setTheme(savedTheme);
-        if (savedTheme === "light") {
+        const activeTheme = propTheme || localStorage.getItem("theme") || "dark";
+        if (activeTheme === "light") {
             document.documentElement.classList.add("light-theme");
+            document.body.classList.add("light-theme");
         } else {
             document.documentElement.classList.remove("light-theme");
+            document.body.classList.remove("light-theme");
         }
 
         const collapsed = localStorage.getItem("sidebar_collapsed") === "true";
         setIsSidebarCollapsed(collapsed);
-    }, []);
+    }, [propTheme]);
 
-    // Guard: Prevent unauthorized access to restricted sections (KPIs, Official Letters)
+    // Guard: Prevent unauthorized access to restricted sections (KPIs)
     useEffect(() => {
         if (!currentUser) return;
-        if (currentUser.role === "Faculty" && (currentTab === "kpis" || currentTab === "invitations")) {
-            setCurrentTab("overview");
-        }
-        if (currentUser.role !== "Principal" && currentUser.role !== "HOD" && currentTab === "invitations") {
+        if (currentUser.role === "Faculty" && currentTab === "kpis") {
             setCurrentTab("overview");
         }
     }, [currentUser, currentTab]);
 
-    const toggleTheme = () => {
+    const toggleTheme = propToggleTheme || (() => {
         const nextTheme = theme === "dark" ? "light" : "dark";
-        setTheme(nextTheme);
+        setInternalTheme(nextTheme);
         localStorage.setItem("theme", nextTheme);
         if (nextTheme === "light") {
             document.documentElement.classList.add("light-theme");
+            document.body.classList.add("light-theme");
         } else {
             document.documentElement.classList.remove("light-theme");
+            document.body.classList.remove("light-theme");
         }
-    };
+    });
 
     const toggleSidebarCollapse = () => {
         const nextVal = !isSidebarCollapsed;
@@ -310,7 +311,7 @@ function Dashboard({ currentUser, onLogout }) {
                                         {currentUser.role === "Faculty" && renderNavButton("activities", "🎯", "Other Activities")}
                                         {renderNavButton("students", "👥", "Student Details")}
                                         {renderNavButton("feedback", "⭐", "Survey Feedbacks")}
-                                        {(currentUser.role === "Principal" || currentUser.role === "HOD") && renderNavButton("invitations", "✉️", "Official Letters")}
+                                        {renderNavButton("invitations", "✉️", "Official Letters")}
                                     </div>
                                 </div>
 
@@ -342,13 +343,20 @@ function Dashboard({ currentUser, onLogout }) {
                 </div>
 
                 {/* Sidebar Footer User Card */}
-                <div className={`p-4 border-t border-slate-800/80 bg-slate-950/20 flex items-center ${isSidebarCollapsed ? "justify-center" : "justify-between"} gap-3 shrink-0`}>
+                <div className={`p-4 border-t border-slate-800/80 bg-slate-950/20 flex items-center ${isSidebarCollapsed ? "justify-center" : "justify-between"} gap-2 shrink-0`}>
                     {!isSidebarCollapsed && (
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-slate-200 truncate">{currentUser.name}</p>
                             <p className="text-[10px] text-slate-500 truncate">{currentUser.email}</p>
                         </div>
                     )}
+                    <button
+                        onClick={toggleTheme}
+                        className="p-2 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800/80 transition text-sm cursor-pointer"
+                        title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                    >
+                        {theme === "dark" ? "☀️" : "🌙"}
+                    </button>
                     <button 
                         onClick={onLogout}
                         className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-all"
@@ -399,13 +407,20 @@ function Dashboard({ currentUser, onLogout }) {
                             />
                         </div>
 
-                        {/* Theme Toggle Button */}
+                        {/* High-visibility Light / Dark Theme Toggle Button */}
                         <button 
                             onClick={toggleTheme}
-                            className="p-2 hover:bg-slate-850 rounded-xl text-slate-400 hover:text-slate-250 transition-all text-xs font-semibold"
-                            title="Toggle Light/Dark Theme"
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-200 text-xs font-semibold shadow-sm cursor-pointer ${
+                                theme === "dark" 
+                                    ? "bg-slate-850 hover:bg-slate-800 text-amber-300 border-slate-700 hover:border-amber-400/50 shadow" 
+                                    : "bg-white hover:bg-slate-100 text-indigo-700 border-slate-300 hover:border-indigo-400 shadow"
+                            }`}
+                            title={`Currently ${theme === "dark" ? "Dark Mode" : "Light Mode"}. Click to switch to ${theme === "dark" ? "Light Mode" : "Dark Mode"}`}
                         >
-                            {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+                            <span className="text-sm">{theme === "dark" ? "☀️" : "🌙"}</span>
+                            <span className="font-semibold hidden sm:inline">
+                                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                            </span>
                         </button>
 
                         {/* Notification Bell Dropdown */}
@@ -661,7 +676,7 @@ function Dashboard({ currentUser, onLogout }) {
                             )}
 
                             {/* INVITATION & LETTERS VIEW */}
-                            {currentTab === "invitations" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
+                            {currentTab === "invitations" && (
                                 <InvitationsLetters currentUser={currentUser} />
                             )}
 

@@ -32,12 +32,6 @@ router.get("/templates", authenticateUser, async (req, res) => {
                 description: "Formal letter of gratitude and appreciation post-event/workshop delivery."
             },
             {
-                id: "offer",
-                title: "Offer & Engagement Letter",
-                category: "Academic Engagements",
-                description: "Terms of engagement, session hours, honorarium, and scope of work for external experts."
-            },
-            {
                 id: "official_comm",
                 title: "Official Institutional Communication",
                 category: "Official Affairs",
@@ -121,7 +115,7 @@ router.post("/preview-pdf", authenticateUser, async (req, res) => {
             userId: user._id,
             role: user.role,
             name: user.name || user.fullName || "Faculty Member",
-            designation: user.designation || (user.role === "HOD" ? "Head of Department" : (user.role === "Principal" ? "Principal" : "Assistant Professor")),
+            designation: user.role === "Faculty" ? "Faculty" : (user.role === "HOD" ? "Vice Principal / CE - HOD" : (user.role === "Principal" ? "Principal" : (user.designation || "Faculty"))),
             department: user.department || letterData.departmentName || "Computer Science & Engineering",
             email: user.email
         };
@@ -168,7 +162,7 @@ router.post("/generate", authenticateUser, async (req, res) => {
             userId: user._id,
             role: user.role,
             name: user.name || user.fullName || "Faculty Member",
-            designation: user.designation || (user.role === "HOD" ? "Head of Department" : (user.role === "Principal" ? "Principal" : "Assistant Professor")),
+            designation: user.role === "Faculty" ? "Faculty" : (user.role === "HOD" ? "Vice Principal / CE - HOD" : (user.role === "Principal" ? "Principal" : (user.designation || "Faculty"))),
             department: user.department || eventDetails.department || "Computer Science & Engineering",
             email: user.email
         };

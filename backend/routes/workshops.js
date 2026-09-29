@@ -5,7 +5,8 @@ const User = require("../models/User");
 const Approval = require("../models/Approval");
 const Organization = require("../models/Organization");
 const Department = require("../models/Department");
-const { sendInvitationEmail, sendThankingEmail, sendWorkshopApprovalEmail } = require("../services/emailService");
+const OfficialLetter = require("../models/OfficialLetter");
+const { sendInvitationEmail, sendThankingEmail, sendWorkshopApprovalEmail, sendOfficialLetterEmail } = require("../services/emailService");
 const { generateLetterPdf, generateRemunerationPdf, generateWorkshopSummaryPdf } = require("../services/letterPdfService");
 const { authenticateUser, requireRole } = require("./authMiddleware");
 
@@ -658,7 +659,8 @@ router.post("/:id/generate-letter-pdf", authenticateUser, async (req, res) => {
 
         const pdfBuffer = await generateLetterPdf(payload);
         const base64Str = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
-        const filename = `${payload.letterType === "invitation" ? "Invitation" : "Appreciation"}_${(payload.eventDetails.title || "Letter").replace(/\s+/g, "_")}.pdf`;
+        const typePrefix = payload.letterType === "invitation" ? "Invitation" : (payload.letterType === "thanking" ? "Appreciation" : "Official");
+        const filename = `${typePrefix}_${(payload.eventDetails.title || "Letter").replace(/\s+/g, "_")}.pdf`;
 
         res.json({
             success: true,
@@ -782,9 +784,9 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             await workshop.save();
         }
 
-        const emailToSend = guestEmail || workshop.guestEmail;
+        const emailToSend = req.body.recipientEmail || guestEmail || workshop.guestEmail;
         if (!emailToSend) {
-            return res.status(400).json({ error: "Guest email is required to send invitation ❌" });
+            return res.status(400).json({ error: "Recipient email is required to send invitation ❌" });
         }
 
         let finalAttachment = attachmentBase64;
@@ -793,7 +795,7 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
         if (attachGeneratedPdf || !finalAttachment) {
             try {
                 const pdfPayload = {
-                    institutionName: letterData?.institutionName || "EduCRM Academic Institution of Technology",
+                    institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
                     departmentName: letterData?.departmentName || workshop.department || req.user.department || "Department of Computer Science & Engineering",
                     refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
                     letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
@@ -807,7 +809,7 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
                     eventVenue: letterData?.eventVenue || workshop.venue || "Campus Seminar Auditorium",
                     bodyText: letterData?.bodyText || "",
                     organizerName: letterData?.organizerName || (workshop.submittedBy ? workshop.submittedBy.name : req.user.name),
-                    principalName: letterData?.principalName || "Dr. Academic Principal"
+                    principalName: letterData?.principalName || "Dr. Suresh Mali"
                 };
                 const pdfBuffer = await generateLetterPdf(pdfPayload);
                 finalAttachment = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
@@ -826,12 +828,13 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
             time: workshop.time || "",
             venue: workshop.venue || "Campus Hall",
-            organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
+            organizerName: req.user.name || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator"),
             deptName: workshop.department || req.user.department,
-            institutionName: letterData?.institutionName || "EduCRM Academic Portal",
+            institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
             customHtml: customHtml || undefined,
             customMessage: customMessage || undefined,
-            attachmentBase64: finalAttachment || workshop.scannedInvitation || undefined
+            attachmentBase64: finalAttachment || workshop.scannedInvitation || undefined,
+            senderEmail: req.user.email
         });
 
         workshop.guestEmail = emailToSend;
@@ -839,7 +842,7 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
         await workshop.save();
 
         res.json({
-            message: "Official invitation message and letter (PDF format) dispatched to guest speaker successfully 📧📄✅",
+            message: `Official invitation message and letter (PDF format) dispatched to ${emailToSend} successfully 📧📄✅`,
             workshop,
             hasPdfAttachment: Boolean(finalAttachment),
             result
@@ -855,6 +858,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
     const { id } = req.params;
     const { 
         guestEmail, 
+        recipientEmail,
         customHtml, 
         customMessage, 
         attachmentBase64, 
@@ -881,7 +885,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
                 speakerOrganization: letterData?.guestOrg || "",
                 guestDesignation: letterData?.guestDesignation || "",
                 guestOrganization: letterData?.guestOrg || "",
-                guestEmail: guestEmail || "",
+                guestEmail: recipientEmail || guestEmail || "",
                 workshopType: "Arranged by Self",
                 status: req.user.role === "Principal" ? "verified" : "pending",
                 submittedBy: req.user._id,
@@ -890,9 +894,9 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             await workshop.save();
         }
 
-        const emailToSend = guestEmail || workshop.guestEmail;
+        const emailToSend = req.body.recipientEmail || guestEmail || workshop.guestEmail;
         if (!emailToSend) {
-            return res.status(400).json({ error: "Guest email is required to send thanking letter ❌" });
+            return res.status(400).json({ error: "Recipient email is required to send thanking letter ❌" });
         }
 
         let finalAttachment = attachmentBase64;
@@ -901,7 +905,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
         if (attachGeneratedPdf || !finalAttachment) {
             try {
                 const pdfPayload = {
-                    institutionName: letterData?.institutionName || "EduCRM Academic Institution of Technology",
+                    institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
                     departmentName: letterData?.departmentName || workshop.department || req.user.department || "Department of Computer Science & Engineering",
                     refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
                     letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
@@ -913,7 +917,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
                     eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
                     bodyText: letterData?.bodyText || "",
                     organizerName: letterData?.organizerName || (workshop.submittedBy ? workshop.submittedBy.name : req.user.name),
-                    principalName: letterData?.principalName || "Dr. Academic Principal"
+                    principalName: letterData?.principalName || "Dr. Suresh Mali"
                 };
                 const pdfBuffer = await generateLetterPdf(pdfPayload);
                 finalAttachment = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
@@ -930,12 +934,13 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             eventTitle: workshop.title,
             eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
-            organizerName: workshop.submittedBy ? workshop.submittedBy.name : req.user.name,
+            organizerName: req.user.name || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator"),
             deptName: workshop.department || req.user.department,
-            institutionName: letterData?.institutionName || "EduCRM Academic Portal",
+            institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
             customHtml: customHtml || undefined,
             customMessage: customMessage || undefined,
-            attachmentBase64: finalAttachment || workshop.scannedThankingLetter || undefined
+            attachmentBase64: finalAttachment || workshop.scannedThankingLetter || undefined,
+            senderEmail: req.user.email
         });
 
         workshop.guestEmail = emailToSend;
@@ -943,7 +948,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
         await workshop.save();
 
         res.json({
-            message: "Official thanking message and appreciation letter (PDF format) dispatched to guest speaker successfully 📧📄✅",
+            message: `Official thanking message and appreciation letter (PDF format) dispatched to ${emailToSend} successfully 📧📄✅`,
             workshop,
             hasPdfAttachment: Boolean(finalAttachment),
             result
@@ -954,13 +959,169 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
     }
 });
 
+// ================= SEND OFFICIAL LETTER EMAIL =================
+router.post("/:id/send-official", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { 
+        guestEmail, 
+        recipientEmail,
+        customHtml, 
+        customMessage, 
+        attachmentBase64, 
+        attachGeneratedPdf = true, 
+        letterData 
+    } = req.body;
+
+    try {
+        let workshop = null;
+        const mongoose = require("mongoose");
+        if (mongoose.Types.ObjectId.isValid(id)) {
+            workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId }).populate("submittedBy", "name department email");
+        }
+        if (!workshop) {
+            workshop = new Workshop({
+                organizationId: req.user.organizationId,
+                title: letterData?.eventTitle || "Official Academic Communication",
+                description: `Official Academic Communication: ${letterData?.eventTitle || "Letter"}`,
+                date: letterData?.eventDate || new Date(),
+                time: letterData?.eventTime || "10:00 AM - 01:00 PM",
+                venue: letterData?.eventVenue || "Campus Auditorium",
+                speakerName: letterData?.guestName || "Recipient",
+                speakerBio: letterData?.guestDesignation || "",
+                speakerOrganization: letterData?.guestOrg || "",
+                guestDesignation: letterData?.guestDesignation || "",
+                guestOrganization: letterData?.guestOrg || "",
+                guestEmail: recipientEmail || guestEmail || "",
+                workshopType: "Official Communication",
+                status: req.user.role === "Principal" ? "verified" : "pending",
+                submittedBy: req.user._id,
+                department: req.user.department
+            });
+            await workshop.save();
+        }
+
+        const emailToSend = recipientEmail || guestEmail || workshop.guestEmail;
+        if (!emailToSend || !emailToSend.includes("@")) {
+            return res.status(400).json({ error: "A valid recipient email address is required to dispatch official letter ❌" });
+        }
+
+        let finalAttachment = attachmentBase64;
+        const deptCode = (req.user.department || "DEPT").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4);
+        const refNo = letterData?.refNo || `DYPCOEI/${deptCode}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`;
+        const letterDate = letterData?.letterDate || new Date().toISOString().split("T")[0];
+
+        const sender = {
+            userId: req.user._id,
+            role: req.user.role,
+            name: req.user.name || req.user.fullName || "Faculty Member",
+            designation: req.user.role === "Faculty" ? "Faculty" : (req.user.role === "HOD" ? "Vice Principal / CE - HOD" : (req.user.role === "Principal" ? "Principal" : req.user.designation)),
+            department: req.user.department || "Computer Science & Engineering",
+            email: req.user.email
+        };
+
+        // Auto-generate official letter PDF if requested or if no physical scan was attached
+        if (attachGeneratedPdf || !finalAttachment) {
+            try {
+                const pdfPayload = {
+                    institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
+                    departmentName: req.user.department || workshop.department || "Department of Computer Science & Engineering",
+                    refNo,
+                    letterDate,
+                    letterType: "official",
+                    guestName: letterData?.guestName || workshop.speakerName || "Distinguished Recipient",
+                    guestDesignation: letterData?.guestDesignation || workshop.guestDesignation || "",
+                    guestOrg: letterData?.guestOrg || workshop.guestOrganization || "",
+                    eventTitle: letterData?.eventTitle || workshop.title || "Official Academic Matter",
+                    eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : letterDate),
+                    eventTime: letterData?.eventTime || workshop.time || "10:00 AM - 01:00 PM",
+                    eventVenue: letterData?.eventVenue || workshop.venue || "Campus Seminar Auditorium",
+                    bodyText: letterData?.bodyText || customMessage || "",
+                    sender,
+                    signatoryType: letterData?.signatoryType || "single"
+                };
+                const pdfBuffer = await generateLetterPdf(pdfPayload);
+                finalAttachment = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+                workshop.scannedOfficialLetter = finalAttachment;
+            } catch (pdfErr) {
+                console.error("PDF auto-generation warning:", pdfErr);
+            }
+        }
+
+        // Send Email via sendOfficialLetterEmail
+        const result = await sendOfficialLetterEmail({
+            recipientEmail: emailToSend,
+            recipientName: letterData?.guestName || workshop.speakerName || "Distinguished Recipient",
+            subject: `Official Institutional Letter: ${letterData?.eventTitle || workshop.title || "Academic Communication"}`,
+            letterType: "official",
+            refNo,
+            letterDate,
+            bodyText: letterData?.bodyText || customMessage || "",
+            eventDetails: {
+                title: letterData?.eventTitle || workshop.title || "Academic Communication",
+                date: letterData?.eventDate || letterDate,
+                time: letterData?.eventTime || "",
+                venue: letterData?.eventVenue || "",
+                mode: workshop.workshopType || "Offline"
+            },
+            sender,
+            attachmentBase64: finalAttachment || workshop.scannedOfficialLetter || undefined
+        });
+
+        workshop.guestEmail = emailToSend;
+        workshop.officialLetterSentAt = new Date();
+        await workshop.save();
+
+        // Also record in OfficialLetter audit ledger
+        try {
+            const officialLetterDoc = new OfficialLetter({
+                refNo,
+                workshopId: workshop._id,
+                letterType: "official_comm",
+                letterCategory: "Official Institutional Letters",
+                subject: `Official Letter: ${letterData?.eventTitle || workshop.title || "Communication"}`,
+                date: new Date(),
+                recipient: {
+                    name: letterData?.guestName || workshop.speakerName || "Recipient",
+                    designation: letterData?.guestDesignation || "",
+                    organization: letterData?.guestOrg || "",
+                    email: emailToSend
+                },
+                eventDetails: {
+                    title: letterData?.eventTitle || workshop.title || "Academic Session",
+                    date: letterData?.eventDate || letterDate,
+                    venue: letterData?.eventVenue || "Campus"
+                },
+                bodyText: letterData?.bodyText || customMessage || "",
+                sender,
+                status: "approved",
+                sentStatus: "sent",
+                sentAt: new Date(),
+                pdfBase64: finalAttachment
+            });
+            await officialLetterDoc.save();
+        } catch (auditErr) {
+            console.warn("Audit record warning in send-official:", auditErr.message);
+        }
+
+        res.json({
+            message: `Official letter (PDF format) dispatched to ${emailToSend} successfully 📧📄✅`,
+            workshop,
+            hasPdfAttachment: Boolean(finalAttachment),
+            result
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message || "Failed to dispatch official letter ❌" });
+    }
+});
+
 // ================= SCAN / UPLOAD LETTER =================
 router.put("/:id/scan", authenticateUser, async (req, res) => {
     const { id } = req.params;
-    const { type, scannedImageBase64 } = req.body; // type: 'invitation' | 'thanking'
+    const { type, scannedImageBase64 } = req.body; // type: 'invitation' | 'thanking' | 'official'
 
-    if (!type || !["invitation", "thanking"].includes(type)) {
-        return res.status(400).json({ error: "Letter type ('invitation' or 'thanking') is required ❌" });
+    if (!type || !["invitation", "thanking", "official"].includes(type)) {
+        return res.status(400).json({ error: "Letter type ('invitation', 'thanking', or 'official') is required ❌" });
     }
 
     if (!scannedImageBase64) {
@@ -994,8 +1155,10 @@ router.put("/:id/scan", authenticateUser, async (req, res) => {
 
         if (type === "invitation") {
             workshop.scannedInvitation = scannedImageBase64;
-        } else {
+        } else if (type === "thanking") {
             workshop.scannedThankingLetter = scannedImageBase64;
+        } else if (type === "official") {
+            workshop.scannedOfficialLetter = scannedImageBase64;
         }
 
         await workshop.save();

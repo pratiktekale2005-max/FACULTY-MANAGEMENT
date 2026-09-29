@@ -26,12 +26,12 @@ function InvitationsLetters({ currentUser }) {
     const [viewDetailModal, setViewDetailModal] = useState(null);
 
     // Dynamic sender details based on logged-in user (Section 2 & 6)
-    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Head of Department" : "Faculty Member");
+    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Adsul Mam" : "Faculty Member");
     const senderDesignation = isPrincipal 
         ? "Principal" 
         : isHOD 
-            ? "Head of Department" 
-            : (currentUser?.designation || "Assistant Professor");
+            ? "Vice Principal / CE - HOD" 
+            : "Faculty";
     const senderDept = currentUser?.department || currentUser?.departmentId?.name || "Computer Engineering";
     const senderEmail = currentUser?.email || "";
 
@@ -556,7 +556,6 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                             >
                                 <option value="invitation">Guest Speaker / Resource Person Invitation</option>
                                 <option value="thanking">Official Gratitude &amp; Thanking Letter</option>
-                                <option value="offer">Offer &amp; Engagement Letter (Honorarium)</option>
                                 <option value="official_comm">Official Institutional Communication</option>
                                 {(isPrincipal || isHOD) && (
                                     <option value="faculty_appointment">Faculty Appointment Order</option>
@@ -577,7 +576,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 <span>🖨️ Print</span>
                             </button>
 
-                            {(templateType === "invitation" || templateType === "thanking" || templateType === "offer") && (
+                            {(templateType === "invitation" || templateType === "thanking" || templateType === "official_comm") && (
                                 <button
                                     onClick={handleOpenEmailModal}
                                     className="px-3.5 py-1.5 text-xs font-semibold text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition-all active:translate-y-0.5 flex items-center gap-1.5"
@@ -609,8 +608,8 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 <span className="text-[10px] text-indigo-400 font-semibold">Live Synced 🔄</span>
                             </div>
 
-                            {/* GUEST LETTERS FIELDS (invitation, thanking, offer, official_comm) */}
-                            {(templateType === "invitation" || templateType === "thanking" || templateType === "offer" || templateType === "official_comm") && (
+                            {/* GUEST LETTERS FIELDS (invitation, thanking, official_comm) */}
+                            {(templateType === "invitation" || templateType === "thanking" || templateType === "official_comm") && (
                                 <div className="space-y-3.5">
                                     <div className="flex flex-col gap-1">
                                         <label className="text-[9px] font-bold text-slate-500 uppercase">Recipient Full Name</label>
@@ -708,31 +707,6 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                             onChange={(e) => setGuestForm({ ...guestForm, eventVenue: e.target.value })}
                                         />
                                     </div>
-
-                                    {/* Offer Letter specific fields */}
-                                    {templateType === "offer" && (
-                                        <div className="grid grid-cols-2 gap-3 bg-amber-500/5 p-3 rounded-xl border border-amber-500/20">
-                                            <div className="flex flex-col gap-1">
-                                                <label className="text-[9px] font-bold text-amber-400 uppercase">Engagement Hours</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
-                                                    value={guestForm.engagementHours}
-                                                    onChange={(e) => setGuestForm({ ...guestForm, engagementHours: e.target.value })}
-                                                />
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <label className="text-[9px] font-bold text-amber-400 uppercase">Remuneration / Honorarium (₹)</label>
-                                                <input
-                                                    type="text"
-                                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
-                                                    value={guestForm.honorariumAmount}
-                                                    onChange={(e) => setGuestForm({ ...guestForm, honorariumAmount: e.target.value })}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
                                     {/* Signatory Mode */}
                                     <div className="flex flex-col gap-1">
                                         <label className="text-[9px] font-bold text-slate-500 uppercase">Signatory Structure</label>
@@ -990,6 +964,18 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                     <div className="border-b border-[#1e1b4b] mt-2"></div>
                                 </div>
 
+                                {/* Leadership Information Banner */}
+                                <div className="flex justify-between items-center text-[9.5px] font-sans font-semibold text-slate-700 border-b border-slate-300 pb-1.5 mb-2">
+                                    <div>
+                                        <span className="font-bold text-slate-900">Dr. Adsul Mam</span>
+                                        <span className="text-slate-600"> | Vice Principal / CE - HOD</span>
+                                    </div>
+                                    <div>
+                                        <span className="font-bold text-slate-900">Dr. Suresh Mali</span>
+                                        <span className="text-slate-600"> | Principal</span>
+                                    </div>
+                                </div>
+
                                 {/* Reference and Date Bar */}
                                 <div className="mt-4 flex justify-between items-center text-xs font-sans text-slate-700 font-semibold border-b border-slate-200 pb-2">
                                     <p>Ref. No: <span className="font-mono text-slate-900 font-bold">{templateType === "faculty_appointment" ? facultyForm.refNo : templateType === "hod_appointment" ? hodForm.refNo : guestForm.refNo}</span></p>
@@ -997,7 +983,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 </div>
 
                                 {/* Recipient Section */}
-                                {(templateType === "invitation" || templateType === "thanking" || templateType === "offer" || templateType === "official_comm") && (
+                                {(templateType === "invitation" || templateType === "thanking" || templateType === "official_comm") && (
                                     <div className="mt-5 space-y-4">
                                         <div className="text-xs space-y-0.5 font-sans">
                                             <p className="font-bold text-slate-700">To,</p>
@@ -1013,9 +999,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                                 ? `Invitation as Guest Speaker / Resource Person for "${guestForm.eventTitle}"`
                                                 : templateType === "thanking"
                                                     ? `Letter of Gratitude & Appreciation for session on "${guestForm.eventTitle}"`
-                                                    : templateType === "offer"
-                                                        ? `Offer & Engagement Letter for Academic Expert Session on "${guestForm.eventTitle}"`
-                                                        : `Official Institutional Communication - "${guestForm.eventTitle}"`}
+                                                    : `Official Institutional Communication - "${guestForm.eventTitle}"`}
                                         </div>
 
                                         {/* Salutation & Body */}
@@ -1041,18 +1025,6 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                                             <td className="p-2 bg-slate-100 font-bold text-slate-700">Designated Venue</td>
                                                             <td className="p-2 font-medium text-slate-900">{guestForm.eventVenue}</td>
                                                         </tr>
-                                                        {templateType === "offer" && (
-                                                            <>
-                                                                <tr className="border-b border-slate-200">
-                                                                    <td className="p-2 bg-slate-100 font-bold text-slate-700">Engagement Scope</td>
-                                                                    <td className="p-2 font-medium text-slate-900">{guestForm.engagementHours}</td>
-                                                                </tr>
-                                                                <tr>
-                                                                    <td className="p-2 bg-slate-100 font-bold text-slate-700">Remuneration / Honorarium</td>
-                                                                    <td className="p-2 font-bold text-emerald-800">₹{guestForm.honorariumAmount} (Inclusive of TA/DA allowances)</td>
-                                                                </tr>
-                                                            </>
-                                                        )}
                                                     </tbody>
                                                 </table>
                                             )}
@@ -1173,13 +1145,13 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                         <div className="space-y-1">
                                             <div className="w-24 h-8 border-b border-dashed border-slate-400 mx-auto mb-1"></div>
                                             <p className="font-bold text-slate-900">{senderName}</p>
-                                            <p className="text-[10px] text-slate-600">Event Coordinator</p>
+                                            <p className="text-[10px] text-slate-600">Faculty</p>
                                             <p className="text-[9px] text-slate-500">Dept. of {senderDept}</p>
                                         </div>
                                         <div className="space-y-1">
                                             <div className="w-24 h-8 border-b border-dashed border-slate-400 mx-auto mb-1"></div>
-                                            <p className="font-bold text-slate-900">{isHOD ? senderName : "Dr. Alpana Adsul"}</p>
-                                            <p className="text-[10px] text-slate-600">Head of Department</p>
+                                            <p className="font-bold text-slate-900">Dr. Adsul Mam</p>
+                                            <p className="text-[10px] text-slate-600">Vice Principal / CE - HOD</p>
                                             <p className="text-[9px] text-slate-500">Dept. of {senderDept}</p>
                                         </div>
                                         <div className="space-y-1">
@@ -1260,7 +1232,6 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 <option value="all">All Document Types</option>
                                 <option value="invitation">Invitation Letters</option>
                                 <option value="thanking">Thanking Letters</option>
-                                <option value="offer">Offer Letters</option>
                                 <option value="faculty_appointment">Faculty Appointment</option>
                                 <option value="hod_appointment">HOD Appointment</option>
                             </select>
@@ -1406,18 +1377,18 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                             </div>
 
                             <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase">Recipient Email Address</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Recipient Email Address <span className="text-rose-400">*</span></label>
                                 <input
                                     type="email"
                                     className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
                                     value={targetEmailInput}
                                     onChange={(e) => setTargetEmailInput(e.target.value)}
-                                    placeholder="e.g. speaker@institution.ac.in"
+                                    placeholder="Enter any valid recipient email (speaker, faculty, or external recipient)"
                                 />
                             </div>
 
                             <p className="text-[11px] text-slate-400 leading-relaxed">
-                                📌 The recipient will receive the official communication on institutional letterhead with the signed PDF document automatically attached.
+                                📌 You can dispatch this official letter to any valid email address. The recipient will receive the official communication on institutional letterhead with the signed PDF document automatically attached.
                             </p>
                         </div>
 

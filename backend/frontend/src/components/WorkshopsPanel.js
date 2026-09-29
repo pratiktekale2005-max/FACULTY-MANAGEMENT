@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import { api } from "../services/api";
 import WorkshopLetterModal from "./WorkshopLetterModal";
 
@@ -538,6 +539,15 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                 <div className="flex flex-wrap items-center gap-2.5">
                     <button
                         type="button"
+                        onClick={() => openLetterModal(null, "official", "generate")}
+                        className="px-3.5 py-2 text-xs font-bold text-blue-200 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
+                        title="Generate, Preview, Scan, or Send official Institutional Letter"
+                    >
+                        <span>🏛️ Official Letter</span>
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={() => openLetterModal(null, "invitation", "generate")}
                         className="px-3.5 py-2 text-xs font-bold text-indigo-200 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 rounded-xl transition-all shadow-sm flex items-center gap-1.5 active:translate-y-0.5 cursor-pointer"
                         title="Generate, Preview, Scan, or Send official Invitation Letter"
@@ -646,6 +656,13 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                     </button>
                                     <button
                                         type="button"
+                                        onClick={() => openLetterModal(null, "official", "generate")}
+                                        className="px-3.5 py-1.5 bg-blue-950/80 hover:bg-blue-900 border border-blue-700/70 text-blue-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                    >
+                                        🏛️ Generate Official Letter
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => openLetterModal(null, "invitation", "generate")}
                                         className="px-3.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/70 text-indigo-300 rounded-xl text-xs font-semibold transition cursor-pointer"
                                     >
@@ -745,8 +762,59 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
                                             {/* ================= 4-STEP LETTER WORKFLOW PANELS ================= */}
                                             <div className="space-y-2.5 mb-4 bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
-                                                {/* INVITATION LETTER WORKFLOW */}
+                                                {/* OFFICIAL LETTER WORKFLOW */}
                                                 <div>
+                                                    <div className="flex items-center justify-between mb-1.5">
+                                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                                                            <span>🏛️</span>
+                                                            <span>Official Letter:</span>
+                                                        </span>
+                                                        {w.officialLetterSentAt ? (
+                                                            <span className="text-[10px] text-emerald-400 font-medium">
+                                                                ✓ Sent {new Date(w.officialLetterSentAt).toLocaleDateString()}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-500">Not Dispatched</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-4 gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openLetterModal(w, "official", "generate")}
+                                                            className="px-2 py-1 bg-blue-950 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded text-[10px] font-semibold text-center transition"
+                                                        >
+                                                            ✍️ 1. Generate
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openLetterModal(w, "official", "view")}
+                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
+                                                        >
+                                                            👁️ 2. View
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openLetterModal(w, "official", "scan")}
+                                                            className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
+                                                                w.scannedOfficialLetter
+                                                                    ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
+                                                                    : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                                                            }`}
+                                                        >
+                                                            📷 3. Scan {w.scannedOfficialLetter && "✓"}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openLetterModal(w, "official", "send")}
+                                                            className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-bold text-center shadow transition"
+                                                        >
+                                                            🚀 4. Send
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* INVITATION LETTER WORKFLOW */}
+                                                <div className="border-t border-slate-850 pt-2">
                                                     <div className="flex items-center justify-between mb-1.5">
                                                         <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
                                                             <span>✉️</span>
@@ -1323,8 +1391,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
             )}
 
             {/* ================= MODAL: WORKSHOP REPORT (Requirement #1: Exact Sequence) ================= */}
-            {reportModalWorkshop && (
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+            {reportModalWorkshop && ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
                     <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6 animate-scale-up text-xs">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
@@ -1612,12 +1680,13 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ================= MODAL: VIEW ALL DETAILS (Requirement #8) ================= */}
-            {detailsModalWorkshop && (
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+            {detailsModalWorkshop && ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
                     <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
@@ -1728,12 +1797,13 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ================= MODAL: EDIT / REGISTER WORKSHOP (Requirement #9: Zero Scrolling Popup) ================= */}
-            {(showAddModal || editModalWorkshop) && (
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+            {(showAddModal || editModalWorkshop) && ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
                     <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -1918,12 +1988,13 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ================= MODAL: REMUNERATION PDF REPORT PREVIEW ================= */}
-            {remunPdfData && (
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+            {remunPdfData && ReactDOM.createPortal(
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
                     <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 animate-scale-up text-xs">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -1965,7 +2036,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                             </a>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
