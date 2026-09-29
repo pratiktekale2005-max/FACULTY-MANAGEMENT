@@ -104,15 +104,60 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     // Fetch notifications from real backend DB
     const fetchAlerts = async () => {
         try {
-            const data = await api.get("/notifications");
+            const data = await api.get("/notifications", {}, { noCache: true });
             setNotifications(data.notifications || []);
         } catch (err) {
             console.error("Notifications fetch error:", err);
         }
     };
 
+    // Real-Time Notification Stream (SSE) & Immediate Background Sync
     useEffect(() => {
         fetchAlerts();
+
+        const apiHost = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "localhost";
+        const BASE_URL = process.env.REACT_APP_API_URL || `http://${apiHost}:5000/api`;
+        const token = localStorage.getItem("accessToken");
+
+        let eventSource = null;
+
+        if (token) {
+            try {
+                eventSource = new EventSource(`${BASE_URL}/notifications/stream?token=${encodeURIComponent(token)}`);
+
+                eventSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === "NOTIFICATION" && data.notification) {
+                            setNotifications(prev => {
+                                if (prev.some(n => n._id === data.notification._id)) return prev;
+                                return [data.notification, ...prev];
+                            });
+                        }
+                    } catch (parseErr) {
+                        // ignore keepalive pings
+                    }
+                };
+
+                eventSource.onerror = () => {
+                    // Browser automatically handles SSE reconnection
+                };
+            } catch (err) {
+                console.error("SSE Connection error:", err);
+            }
+        }
+
+        // Smart polling fallback (every 8 seconds) to guarantee real-time updates across network boundaries
+        const fallbackInterval = setInterval(() => {
+            fetchAlerts();
+        }, 8000);
+
+        return () => {
+            if (eventSource) {
+                eventSource.close();
+            }
+            clearInterval(fallbackInterval);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refreshTrigger]);
 
@@ -163,15 +208,15 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                     setSelectedFacultyProfile(null);
                     setIsMobileSidebarOpen(false); 
                 }}
-                className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} text-xs font-semibold rounded-xl transition-all text-left ${
+                className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"} text-xs font-semibold rounded-xl transition-all text-left ${
                     isActive 
                         ? "bg-indigo-650 text-white shadow-lg shadow-indigo-650/15" 
                         : "text-slate-400 hover:text-slate-200 hover:bg-slate-850"
                 }`}
                 title={label}
             >
-                <span className="text-sm shrink-0">{icon}</span>
-                {!isSidebarCollapsed && <span className="truncate">{label}</span>}
+                <span className="w-6 h-6 flex items-center justify-center text-sm shrink-0 leading-none">{icon}</span>
+                {!isSidebarCollapsed && <span className="truncate leading-tight">{label}</span>}
             </button>
         );
     };
@@ -343,17 +388,17 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                     )}
                     <button
                         onClick={toggleTheme}
-                        className="p-2 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800/80 transition text-sm cursor-pointer"
+                        className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-100 hover:bg-slate-800/80 transition text-sm cursor-pointer"
                         title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
                     >
-                        {theme === "dark" ? "☀️" : "🌙"}
+                        <span className="leading-none">{theme === "dark" ? "☀️" : "🌙"}</span>
                     </button>
                     <button 
                         onClick={onLogout}
-                        className="p-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-all"
+                        className="w-8 h-8 flex items-center justify-center bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-all text-sm cursor-pointer"
                         title="Logout"
                     >
-                        🚪
+                        <span className="leading-none">🚪</span>
                     </button>
                 </div>
             </aside>
@@ -366,16 +411,17 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                     <div className="flex items-center gap-3">
                         <button 
                             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} 
-                            className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                            className="lg:hidden w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors cursor-pointer text-base"
+                            title="Open Menu"
                         >
-                            🍔
+                            <span className="leading-none">🍔</span>
                         </button>
                         <button 
                             onClick={toggleSidebarCollapse} 
-                            className="hidden lg:block p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors"
+                            className="hidden lg:flex w-9 h-9 items-center justify-center rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors cursor-pointer text-xs"
                             title="Toggle Sidebar Collapse"
                         >
-                            {isSidebarCollapsed ? "▶" : "◀"}
+                            <span className="leading-none">{isSidebarCollapsed ? "▶" : "◀"}</span>
                         </button>
                         <div>
                             <h1 className="text-sm font-bold text-slate-100 tracking-tight leading-none">{getTabTitle()}</h1>
@@ -385,11 +431,11 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         
                         {/* Global Search bar */}
-                        <div className="hidden md:flex items-center bg-slate-950/60 border border-slate-850 rounded-xl px-3 py-1.5 w-56 text-slate-200 transition-all focus-within:border-indigo-500">
-                            <span className="text-xs text-slate-500 mr-2">🔍</span>
+                        <div className="hidden md:flex items-center bg-slate-950/60 border border-slate-850 rounded-xl px-3 h-9 w-56 text-slate-200 transition-all focus-within:border-indigo-500">
+                            <span className="w-5 h-5 flex items-center justify-center text-xs text-slate-500 mr-1.5 shrink-0">🔍</span>
                             <input 
                                 type="text" 
                                 placeholder="Search repository..." 
@@ -401,15 +447,15 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                         {/* High-visibility Light / Dark Theme Toggle Button */}
                         <button 
                             onClick={toggleTheme}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-200 text-xs font-semibold shadow-sm cursor-pointer ${
+                            className={`h-9 flex items-center gap-2 px-3 rounded-xl border transition-all duration-200 text-xs font-semibold shadow-sm cursor-pointer ${
                                 theme === "dark" 
                                     ? "bg-slate-850 hover:bg-slate-800 text-amber-300 border-slate-700 hover:border-amber-400/50 shadow" 
                                     : "bg-white hover:bg-slate-100 text-indigo-700 border-slate-300 hover:border-indigo-400 shadow"
                             }`}
                             title={`Currently ${theme === "dark" ? "Dark Mode" : "Light Mode"}. Click to switch to ${theme === "dark" ? "Light Mode" : "Dark Mode"}`}
                         >
-                            <span className="text-sm">{theme === "dark" ? "☀️" : "🌙"}</span>
-                            <span className="font-semibold hidden sm:inline">
+                            <span className="w-4 h-4 flex items-center justify-center text-sm leading-none shrink-0">{theme === "dark" ? "☀️" : "🌙"}</span>
+                            <span className="font-semibold hidden sm:inline leading-none">
                                 {theme === "dark" ? "Light Mode" : "Dark Mode"}
                             </span>
                         </button>
@@ -418,11 +464,12 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                         <div className="relative">
                             <button 
                                 onClick={() => setShowNotifications(!showNotifications)}
-                                className="p-2.5 hover:bg-slate-850 rounded-xl text-slate-400 hover:text-slate-200 transition-all text-xs relative"
+                                className="w-9 h-9 flex items-center justify-center hover:bg-slate-850 rounded-xl text-slate-400 hover:text-slate-200 transition-all text-sm relative cursor-pointer"
+                                title="Notifications"
                             >
-                                🔔
+                                <span className="leading-none">🔔</span>
                                 {notifications.filter(n => !n.isRead).length > 0 && (
-                                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-505 rounded-full flex items-center justify-center text-[9px] font-bold text-white leading-none shadow">
+                                    <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 bg-rose-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white leading-none shadow ring-2 ring-slate-900 animate-pulse">
                                         {notifications.filter(n => !n.isRead).length}
                                     </span>
                                 )}
@@ -436,11 +483,12 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                             {notifications.some(n => !n.isRead) && (
                                                 <button 
                                                     onClick={async () => {
+                                                        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
                                                         try {
                                                             await api.put("/notifications/read-all");
-                                                            fetchAlerts();
                                                         } catch (e) {
                                                             console.error("Mark read all failed:", e);
+                                                            fetchAlerts();
                                                         }
                                                     }}
                                                     className="text-[9px] font-semibold text-indigo-400 hover:text-indigo-300"
@@ -462,21 +510,22 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                                     key={n._id} 
                                                     onClick={async () => {
                                                         if (!n.isRead) {
+                                                            setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, isRead: true } : item));
                                                             try {
                                                                 await api.put(`/notifications/${n._id}/read`);
-                                                                fetchAlerts();
                                                             } catch (e) {
                                                                 console.error("Mark read failed:", e);
+                                                                fetchAlerts();
                                                             }
                                                         }
                                                     }}
-                                                    className={`p-2.5 rounded-xl border flex items-start gap-2 cursor-pointer transition-colors ${
+                                                    className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-colors ${
                                                         n.isRead 
                                                             ? "bg-slate-950/40 border-slate-900/60 opacity-60" 
                                                             : "bg-slate-950 border-slate-850 hover:bg-slate-900/60"
                                                     }`}
                                                 >
-                                                    <span className="text-xs mt-0.5">
+                                                    <span className="w-7 h-7 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-center text-xs shrink-0 mt-0.5">
                                                         {n.type === "warning" ? "⚠️" : n.type === "deadline" ? "⏰" : n.type === "approval" ? "🔔" : "ℹ️"}
                                                     </span>
                                                     <div className="min-w-0 flex-1">
@@ -490,7 +539,6 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                 </div>
                             )}
                         </div>
-
                     </div>
                 </header>
 

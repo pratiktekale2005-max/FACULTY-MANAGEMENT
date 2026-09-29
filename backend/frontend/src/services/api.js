@@ -81,20 +81,79 @@ const request = async (url, options) => {
     return res.json();
 };
 
+// In-memory client-side cache for instantaneous tab switching and zero duplicate calls
+const requestCache = new Map();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+const invalidateCacheByPrefix = (prefix) => {
+    for (const key of requestCache.keys()) {
+        if (key.startsWith(prefix)) {
+            requestCache.delete(key);
+        }
+    }
+};
+
+const invalidateOnMutation = (endpoint) => {
+    const base = endpoint.split("?")[0].replace(/^\/api/, "").split("/").filter(Boolean)[0];
+    if (base) {
+        invalidateCacheByPrefix(`/${base}`);
+    }
+    // Cross-cutting module invalidations
+    if (endpoint.includes("/approvals") || endpoint.includes("/workshops") || endpoint.includes("/papers") || endpoint.includes("/activities")) {
+        invalidateCacheByPrefix("/approvals");
+        invalidateCacheByPrefix("/workshops");
+        invalidateCacheByPrefix("/papers");
+        invalidateCacheByPrefix("/activities");
+        invalidateCacheByPrefix("/analytics");
+        invalidateCacheByPrefix("/users");
+    }
+    if (endpoint.includes("/tasks")) {
+        invalidateCacheByPrefix("/tasks");
+        invalidateCacheByPrefix("/analytics");
+    }
+    if (endpoint.includes("/notifications")) {
+        invalidateCacheByPrefix("/notifications");
+    }
+};
+
 export const api = {
-    async get(endpoint, params = {}) {
+    clearCache() {
+        requestCache.clear();
+    },
+
+    invalidateCache(prefix) {
+        invalidateCacheByPrefix(prefix);
+    },
+
+    async get(endpoint, params = {}, options = {}) {
         const queryParams = { ...params };
         const queryStr = Object.keys(queryParams)
             .filter(k => queryParams[k] !== undefined && queryParams[k] !== null && queryParams[k] !== "")
             .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
             .join("&");
         const url = `${BASE_URL}${endpoint}${queryStr ? `?${queryStr}` : ""}`;
-        return request(url, {
+        const cacheKey = `${endpoint}${queryStr ? `?${queryStr}` : ""}`;
+
+        // Return from cache if valid and noCache is not forced
+        if (!options.noCache && requestCache.has(cacheKey)) {
+            const cached = requestCache.get(cacheKey);
+            const isFresh = (Date.now() - cached.timestamp) < CACHE_TTL_MS;
+            if (isFresh) {
+                return cached.data;
+            }
+        }
+
+        const data = await request(url, {
             headers: getAuthHeaders()
         });
+
+        // Store in cache
+        requestCache.set(cacheKey, { data, timestamp: Date.now() });
+        return data;
     },
 
     async post(endpoint, body = {}, useAuthParams = true) {
+        invalidateOnMutation(endpoint);
         const authParams = useAuthParams ? getAuthParams() : {};
         const mergedBody = { ...authParams, ...body };
         if (authParams.userId && !mergedBody.requesterId) {
@@ -112,6 +171,7 @@ export const api = {
     },
 
     async put(endpoint, body = {}) {
+        invalidateOnMutation(endpoint);
         const authParams = getAuthParams();
         const mergedBody = { ...authParams, ...body };
         if (authParams.userId && !mergedBody.requesterId) {
@@ -129,6 +189,7 @@ export const api = {
     },
 
     async delete(endpoint, body = {}) {
+        invalidateOnMutation(endpoint);
         const authParams = getAuthParams();
         const mergedBody = { ...authParams, ...body };
         if (authParams.userId && !mergedBody.requesterId) {

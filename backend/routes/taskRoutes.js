@@ -70,17 +70,16 @@ router.post("/", requireRole(["Principal", "HOD"]), async (req, res) => {
 
         await newTask.save();
 
-        // Create Notification for the assigned faculty member
+        // Real-Time Notification for assigned faculty member
         try {
-            const Notification = require("../models/Notification");
-            const notif = new Notification({
+            const { createAndDispatchNotification } = require("../services/realtimeNotifications");
+            await createAndDispatchNotification({
                 organizationId: req.user.organizationId,
                 userId: assignedTo,
-                title: "New Task Assigned",
+                title: "New Task Assigned 📋",
                 message: `You have been assigned a new task: "${title}". Deadline: ${deadline}.`,
                 type: "deadline"
             });
-            await notif.save();
         } catch (notifErr) {
             console.error("Failed to create task notification:", notifErr);
         }
@@ -130,6 +129,21 @@ router.put("/:id", authenticateUser, async (req, res) => {
         }
 
         await task.save();
+
+        // If updated by faculty, notify HOD in real time
+        if (req.user.role === "Faculty") {
+            try {
+                const { notifyDepartmentHOD } = require("../services/realtimeNotifications");
+                await notifyDepartmentHOD(req.user.organizationId, req.user.departmentId, {
+                    title: "Task Progress Update 📋",
+                    message: `${req.user.name} updated task "${task.title}" status to "${task.status}".`,
+                    type: "info"
+                });
+            } catch (notifErr) {
+                console.error("Failed to notify HOD of task update:", notifErr);
+            }
+        }
+
         res.json({ message: "Task updated successfully ✅", task });
     } catch (err) {
         console.error(err);

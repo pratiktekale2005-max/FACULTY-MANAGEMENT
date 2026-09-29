@@ -1,7 +1,27 @@
 const express = require("express");
 const router = express.Router();
 const Notification = require("../models/Notification");
+const { registerClient } = require("../services/realtimeNotifications");
 const { authenticateUser } = require("./authMiddleware");
+
+// ================= REAL-TIME SSE STREAM =================
+router.get("/stream", authenticateUser, (req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no"
+    });
+
+    // Tell client to reconnect after 3 seconds if disconnected
+    res.write("retry: 3000\n\n");
+
+    registerClient(req.user._id, res, {
+        role: req.user.role,
+        organizationId: req.user.organizationId,
+        departmentId: req.user.departmentId
+    });
+});
 
 // ================= GET MY NOTIFICATIONS =================
 router.get("/", authenticateUser, async (req, res) => {

@@ -767,6 +767,169 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                                 {w.guestEmail && <div className="text-slate-400 text-[11px]">✉️ {w.guestEmail}</div>}
                                                 {w.speakerBio && <div className="text-slate-400 text-[11px] pt-1 italic">{w.speakerBio}</div>}
                                             </div>
+
+                                            {/* ================= 4-STEP LETTER WORKFLOW PANELS (Removed for Faculty, Available for HOD & Authorized Roles) ================= */}
+                                            {currentUser?.role !== "Faculty" && (
+                                                <div className="space-y-2.5 mb-4 bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Letter Generation & Status</span>
+                                                        <span className="text-[9px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">4-Step Workflow</span>
+                                                    </div>
+
+                                                    {/* OFFICIAL LETTER WORKFLOW */}
+                                                    <div className="border-t border-slate-850 pt-2">
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1">
+                                                                <span>🏛️</span>
+                                                                <span>Official Letter:</span>
+                                                            </span>
+                                                            {w.officialLetterSentAt ? (
+                                                                <span className="text-[10px] text-emerald-400 font-medium">
+                                                                    ✓ Sent {new Date(w.officialLetterSentAt).toLocaleDateString()}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-slate-500">Not Dispatched</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-4 gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "official", "generate")}
+                                                                className="px-2 py-1 bg-blue-950 hover:bg-blue-900 border border-blue-700/60 text-blue-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                ✍️ 1. Generate
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "official", "view")}
+                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                👁️ 2. View
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "official", "scan")}
+                                                                className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
+                                                                    w.scannedOfficialLetter
+                                                                        ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
+                                                                        : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                                                                }`}
+                                                            >
+                                                                📷 3. Scan {w.scannedOfficialLetter && "✓"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "official", "send")}
+                                                                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-bold text-center shadow transition"
+                                                            >
+                                                                🚀 4. Send
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* INVITATION LETTER WORKFLOW */}
+                                                    <div className="border-t border-slate-850 pt-2">
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
+                                                                <span>✉️</span>
+                                                                <span>Invitation Letter:</span>
+                                                            </span>
+                                                            {w.invitationSentAt ? (
+                                                                <span className="text-[10px] text-emerald-400 font-medium">
+                                                                    ✓ Sent {new Date(w.invitationSentAt).toLocaleDateString()}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-slate-500">Not Dispatched</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-4 gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "invitation", "generate")}
+                                                                className="px-2 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                ✍️ 1. Generate
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "invitation", "view")}
+                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                👁️ 2. View
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "invitation", "scan")}
+                                                                className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
+                                                                    w.scannedInvitation
+                                                                        ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
+                                                                        : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                                                                }`}
+                                                            >
+                                                                📷 3. Scan {w.scannedInvitation && "✓"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "invitation", "send")}
+                                                                className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold text-center shadow transition"
+                                                            >
+                                                                🚀 4. Send
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* THANKING / APPRECIATION LETTER WORKFLOW */}
+                                                    <div className="border-t border-slate-850 pt-2">
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                                                <span>🤝</span>
+                                                                <span>Thanking Letter:</span>
+                                                            </span>
+                                                            {w.thankingSentAt ? (
+                                                                <span className="text-[10px] text-emerald-400 font-medium">
+                                                                    ✓ Sent {new Date(w.thankingSentAt).toLocaleDateString()}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] text-slate-500">Not Dispatched</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-4 gap-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "thanking", "generate")}
+                                                                className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                ✍️ 1. Generate
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "thanking", "view")}
+                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded text-[10px] font-semibold text-center transition"
+                                                            >
+                                                                👁️ 2. View
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "thanking", "scan")}
+                                                                className={`px-2 py-1 rounded text-[10px] font-semibold text-center transition border ${
+                                                                    w.scannedThankingLetter
+                                                                        ? "bg-emerald-950/70 border-emerald-700 text-emerald-300"
+                                                                        : "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                                                                }`}
+                                                            >
+                                                                📷 3. Scan {w.scannedThankingLetter && "✓"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openLetterModal(w, "thanking", "send")}
+                                                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold text-center shadow transition"
+                                                            >
+                                                                🚀 4. Send
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div>

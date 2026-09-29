@@ -133,21 +133,14 @@ router.post("/", authenticateUser, async (req, res) => {
             });
             await newApproval.save();
 
-            // Create HOD notification
+            // Real-Time Notification for HOD
             try {
-                const Department = require("../models/Department");
-                const Notification = require("../models/Notification");
-                const dept = await Department.findById(req.user.departmentId);
-                if (dept && dept.hodId) {
-                    const notif = new Notification({
-                        organizationId: req.user.organizationId,
-                        userId: dept.hodId,
-                        title: "New Publication Submitted",
-                        message: `${req.user.name} submitted a new research paper for approval: ${title}`,
-                        type: "approval"
-                    });
-                    await notif.save();
-                }
+                const { notifyDepartmentHOD } = require("../services/realtimeNotifications");
+                await notifyDepartmentHOD(req.user.organizationId, req.user.departmentId, {
+                    title: "New Publication Submitted",
+                    message: `${req.user.name} submitted a new research paper for approval: "${title}"`,
+                    type: "approval"
+                });
             } catch (notifErr) {
                 console.error("Failed to create HOD notification:", notifErr);
             }

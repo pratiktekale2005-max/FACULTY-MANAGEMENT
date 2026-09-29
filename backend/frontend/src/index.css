@@ -164,7 +164,8 @@ body.light-theme {
 /* Base Canvas & Container Backgrounds */
 .light-theme .bg-slate-950,
 .light-theme .bg-\[\#080b11\],
-.light-theme .bg-\[\#0a0f1d\] {
+.light-theme .bg-\[\#0a0f1d\],
+.light-theme .bg-\[\#0d1526\] {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
@@ -180,7 +181,8 @@ body.light-theme {
 .light-theme .bg-slate-950\/40,
 .light-theme .bg-slate-950\/50,
 .light-theme .bg-slate-950\/60,
-.light-theme .bg-slate-950\/80 {
+.light-theme .bg-slate-950\/80,
+.light-theme .bg-slate-950\/90 {
   background-color: #ffffff !important;
   color: #0f172a !important;
 }
@@ -189,7 +191,9 @@ body.light-theme {
 .light-theme .bg-slate-800,
 .light-theme .bg-slate-850,
 .light-theme .bg-slate-800\/60,
-.light-theme .bg-slate-850\/60 {
+.light-theme .bg-slate-850\/60,
+.light-theme .bg-slate-800\/40,
+.light-theme .bg-slate-900\/40 {
   background-color: #f1f5f9 !important;
   color: #1e293b !important;
 }
@@ -246,20 +250,27 @@ body.light-theme {
 .light-theme a[class*="bg-emerald"],
 .light-theme a[class*="bg-blue"],
 .light-theme a[class*="bg-rose"],
+.light-theme a[class*="bg-purple"],
 .light-theme [class*="bg-indigo-600"],
 .light-theme [class*="bg-indigo-650"],
 .light-theme [class*="bg-emerald-600"],
 .light-theme [class*="bg-emerald-650"],
 .light-theme [class*="bg-rose-600"],
 .light-theme [class*="bg-rose-500"],
-.light-theme [class*="bg-blue-600"] {
+.light-theme [class*="bg-blue-600"],
+.light-theme [class*="bg-purple-600"] {
   color: #ffffff !important;
 }
 
 .light-theme button[class*="bg-indigo"] span,
 .light-theme button[class*="bg-emerald"] span,
 .light-theme button[class*="bg-rose"] span,
-.light-theme button[class*="bg-blue"] span {
+.light-theme button[class*="bg-blue"] span,
+.light-theme button[class*="bg-purple"] span,
+.light-theme a[class*="bg-indigo"] span,
+.light-theme a[class*="bg-emerald"] span,
+.light-theme a[class*="bg-blue"] span,
+.light-theme a[class*="bg-rose"] span {
   color: #ffffff !important;
 }
 
@@ -279,7 +290,7 @@ body.light-theme {
   color: #0f172a !important;
 }
 
-/* Light Theme Typography */
+/* CRITICAL FIX FOR LIGHT THEME: Prevent white text on white backgrounds */
 .light-theme h1,
 .light-theme h2,
 .light-theme h3,
@@ -291,16 +302,17 @@ body.light-theme {
 
 .light-theme .text-slate-100,
 .light-theme .text-slate-200,
-.light-theme .text-slate-250 {
+.light-theme .text-slate-250,
+.light-theme .text-slate-350 {
   color: #0f172a !important;
 }
 
 .light-theme .text-slate-300 {
-  color: #334155 !important;
+  color: #1e293b !important;
 }
 
 .light-theme .text-slate-400 {
-  color: #64748b !important;
+  color: #475569 !important;
 }
 
 .light-theme .text-slate-500 {
@@ -308,10 +320,22 @@ body.light-theme {
 }
 
 .light-theme .text-slate-600 {
-  color: #475569 !important;
+  color: #64748b !important;
 }
 
-/* Light Theme Form Controls */
+/* Convert un-classed text-white inside general containers to dark slate */
+.light-theme div.text-white,
+.light-theme p.text-white,
+.light-theme strong.text-white,
+.light-theme label.text-white {
+  color: #0f172a !important;
+}
+
+.light-theme span.text-white:not(button *):not(a *):not([class*="bg-indigo"] *):not([class*="bg-emerald"] *):not([class*="bg-rose"] *):not([class*="bg-blue"] *):not([class*="bg-purple"] *):not([class*="badge-solid"] *) {
+  color: #0f172a !important;
+}
+
+/* Form Controls in Light Mode */
 .light-theme input[type="text"],
 .light-theme input[type="email"],
 .light-theme input[type="password"],
@@ -350,15 +374,21 @@ body.light-theme {
 }
 
 .light-theme table thead th {
-  color: #475569 !important;
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
 }
 
 .light-theme table tbody tr {
   border-bottom: 1px solid #f1f5f9 !important;
+  background-color: #ffffff !important;
 }
 
 .light-theme table tbody tr:hover {
   background-color: #f8fafc !important;
+}
+
+.light-theme table tbody td {
+  color: #1e293b !important;
 }
 
 /* Status Badges & Pills in Light Mode (Clean, pastel aesthetics) */
@@ -434,12 +464,12 @@ body.light-theme {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
 }
 
-/* Maintain dark backdrop contrast for modals in both themes */
+/* Modals backdrop contrast */
 .light-theme .bg-black\/80,
 .light-theme .bg-black\/85,
 .light-theme .bg-slate-950\/85,
 .light-theme .bg-slate-950\/80 {
-  background-color: rgba(0, 0, 0, 0.8) !important;
+  background-color: rgba(15, 23, 42, 0.75) !important;
 }
 
 /* Modal Inner Card (Workshop letter modal stays dark with white paper inside) */
@@ -478,4 +508,62 @@ body.light-theme {
 .light-theme .bg-white {
   background-color: #ffffff !important;
   color: #0f172a !important;
+}
+
+/* Notification Panel Dropdown in Light Theme */
+.light-theme .notification-dropdown,
+.light-theme [class*="w-80"][class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+.light-theme [class*="w-80"][class*="bg-slate-900"] .bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+.light-theme [class*="w-80"][class*="bg-slate-900"] .bg-slate-950:hover {
+  background-color: #f1f5f9 !important;
+}
+
+.light-theme [class*="w-80"][class*="bg-slate-900"] .text-slate-200 {
+  color: #0f172a !important;
+}
+
+.light-theme [class*="w-80"][class*="bg-slate-900"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+/* ==============================================================
+   UNIVERSAL ICON & BOX ALIGNMENT SYSTEM
+   ============================================================== */
+.icon-box,
+[data-icon-box] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.nav-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.action-btn-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 0.75rem;
 }

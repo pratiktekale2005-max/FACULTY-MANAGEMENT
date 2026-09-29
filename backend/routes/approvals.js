@@ -204,19 +204,38 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
             description: `${req.user.name} (${req.user.role}) transitioned approval status from ${prevStatus} to ${nextStatus}.`,
             metadata: { comment: comment || "" }
         });
-        // Create Notification for submitting faculty
+        // Real-Time Notifications for all involved parties
         try {
-            const Notification = require("../models/Notification");
-            const notif = new Notification({
+            const { createAndDispatchNotification, notifyPrincipals, notifyDepartmentHOD } = require("../services/realtimeNotifications");
+
+            // 1. Notify the submitting faculty member in real time
+            await createAndDispatchNotification({
                 organizationId: req.user.organizationId,
                 userId: approval.submittedBy,
                 title: "Submission Status Updated",
-                message: `Your ${approval.entityType.toLowerCase()} submission has been set to "${nextStatus.replace('_', ' ')}" by ${req.user.name}.`,
+                message: `Your ${approval.entityType.toLowerCase()} submission has been set to "${nextStatus.replace(/_/g, ' ')}" by ${req.user.name} (${req.user.role}).`,
                 type: "approval"
             });
-            await notif.save();
+
+            // 2. If status is forwarded to Principal (HOD_APPROVED), alert Principal(s) immediately
+            if (nextStatus === "HOD_APPROVED") {
+                await notifyPrincipals(req.user.organizationId, {
+                    title: "Pending Principal Review",
+                    message: `${approval.entityType} request from ${approval.submittedByName || "Faculty"} was endorsed by HOD ${req.user.name} and awaits your decision.`,
+                    type: "approval"
+                });
+            }
+
+            // 3. If action was taken by Principal, also keep HOD informed
+            if (req.user.role === "Principal" && approval.departmentId) {
+                await notifyDepartmentHOD(req.user.organizationId, approval.departmentId, {
+                    title: "Principal Decision Update",
+                    message: `Principal ${req.user.name} decided "${nextStatus.replace(/_/g, ' ')}" on ${approval.entityType.toLowerCase()} submission by ${approval.submittedByName || "Faculty"}.`,
+                    type: "approval"
+                });
+            }
         } catch (notifErr) {
-            console.error("Failed to create faculty notification:", notifErr);
+            console.error("Failed to dispatch real-time approval notifications:", notifErr);
         }
 
         res.json({ message: `Successfully transitioned request state to: ${nextStatus} ✅`, approval });

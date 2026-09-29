@@ -124,21 +124,14 @@ router.post("/", authenticateUser, async (req, res) => {
         });
         await newApproval.save();
 
-        // Create HOD notification
+        // Real-Time Notification for HOD
         try {
-            const Department = require("../models/Department");
-            const Notification = require("../models/Notification");
-            const dept = await Department.findById(req.user.departmentId);
-            if (dept && dept.hodId) {
-                const notif = new Notification({
-                    organizationId: req.user.organizationId,
-                    userId: dept.hodId,
-                    title: "New Workshop Submitted",
-                    message: `${req.user.name} submitted a new workshop for approval: ${title}`,
-                    type: "approval"
-                });
-                await notif.save();
-            }
+            const { notifyDepartmentHOD } = require("../services/realtimeNotifications");
+            await notifyDepartmentHOD(req.user.organizationId, req.user.departmentId, {
+                title: "New Workshop Submitted",
+                message: `${req.user.name} submitted a new workshop for review: "${title}"`,
+                type: "approval"
+            });
         } catch (notifErr) {
             console.error("Failed to create HOD notification:", notifErr);
         }
@@ -342,6 +335,20 @@ router.put("/:id/status", requireRole(["HOD"]), async (req, res) => {
             } catch (emailErr) {
                 console.error("Error dispatching workshop approval email:", emailErr);
             }
+        }
+
+        // Real-Time Notification to submitting faculty
+        try {
+            const { createAndDispatchNotification } = require("../services/realtimeNotifications");
+            await createAndDispatchNotification({
+                organizationId: req.user.organizationId,
+                userId: workshop.submittedBy,
+                title: status === "verified" ? "Workshop Approved ✅" : "Workshop Rejected ❌",
+                message: `Your workshop "${workshop.title}" was ${status === "verified" ? "approved" : "rejected"} by HOD ${req.user.name}.`,
+                type: "approval"
+            });
+        } catch (notifErr) {
+            console.error("Failed to notify faculty of workshop decision:", notifErr);
         }
 
         const populatedWorkshop = await Workshop.findById(workshop._id).populate("submittedBy", "name email department designation");
