@@ -52,6 +52,7 @@ function Login({ setStep, onLoginSuccess, theme = "dark", toggleTheme }) {
             }, false);
 
             if (onLoginSuccess) {
+                api.clearCache();
                 onLoginSuccess(data.user, data.accessToken, data.refreshToken);
             }
         } catch (err) {

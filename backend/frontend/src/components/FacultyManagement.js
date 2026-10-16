@@ -213,8 +213,21 @@ function FacultyManagement({ currentUser, onRefresh, onSelectFaculty }) {
             </div>
 
             {error && (
-                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-455 p-3.5 rounded-xl">
-                    {error}
+                <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3.5 rounded-xl flex items-center justify-between gap-3">
+                    <span>{error}</span>
+                    {error.includes("Forbidden") && (
+                        <button 
+                            onClick={() => {
+                                localStorage.removeItem("accessToken");
+                                localStorage.removeItem("refreshToken");
+                                localStorage.removeItem("crm_user");
+                                window.location.reload();
+                            }}
+                            className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-[10px] shrink-0 transition-all cursor-pointer shadow"
+                        >
+                            🔄 Re-login as Principal
+                        </button>
+                    )}
                 </div>
             )}
 

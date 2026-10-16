@@ -826,6 +826,19 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             }
         }
 
+        if (!req.user || !req.user.email) {
+            return res.status(401).json({ error: "Authenticated faculty email is required to dispatch invitation ❌" });
+        }
+
+        // Fetch full faculty record with emailSettings.appPassword
+        const authenticatedFaculty = await User.findById(req.user._id).select("+emailSettings.appPassword");
+        if (!authenticatedFaculty) {
+            return res.status(401).json({ error: "Authenticated faculty profile not found ❌" });
+        }
+
+        const facultySenderEmail = authenticatedFaculty.email;
+        const facultySenderName = authenticatedFaculty.name || authenticatedFaculty.fullName || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator");
+
         // Send Email
         const result = await sendInvitationEmail({
             guestEmail: emailToSend,
@@ -835,13 +848,14 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
             time: workshop.time || "",
             venue: workshop.venue || "Campus Hall",
-            organizerName: req.user.name || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator"),
+            organizerName: facultySenderName,
             deptName: workshop.department || req.user.department,
             institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
             customHtml: customHtml || undefined,
             customMessage: customMessage || undefined,
             attachmentBase64: finalAttachment || workshop.scannedInvitation || undefined,
-            senderEmail: req.user.email
+            senderEmail: facultySenderEmail,
+            facultyUser: authenticatedFaculty
         });
 
         workshop.guestEmail = emailToSend;
@@ -852,10 +866,20 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             message: `Official invitation message and letter (PDF format) dispatched to ${emailToSend} successfully 📧📄✅`,
             workshop,
             hasPdfAttachment: Boolean(finalAttachment),
+            senderEmail: facultySenderEmail,
+            authenticatedAs: result.authenticatedAs,
+            mode: result.mode,
             result
         });
     } catch (err) {
         console.error(err);
+        if (err.code === "FACULTY_EMAIL_NOT_CONFIGURED") {
+            return res.status(400).json({
+                error: err.message,
+                code: "FACULTY_EMAIL_NOT_CONFIGURED",
+                facultyEmail: req.user?.email
+            });
+        }
         res.status(500).json({ error: err.message || "Failed to dispatch invitation email ❌" });
     }
 });
@@ -934,20 +958,34 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             }
         }
 
-        // Send Email
+        if (!req.user || !req.user.email) {
+            return res.status(401).json({ error: "Authenticated faculty email is required to dispatch thanking letter ❌" });
+        }
+
+        // Fetch full faculty record with emailSettings.appPassword
+        const authenticatedFaculty = await User.findById(req.user._id).select("+emailSettings.appPassword");
+        if (!authenticatedFaculty) {
+            return res.status(401).json({ error: "Authenticated faculty profile not found ❌" });
+        }
+
+        const facultySenderEmail = authenticatedFaculty.email;
+        const facultySenderName = authenticatedFaculty.name || authenticatedFaculty.fullName || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator");
+
+        // Send Email using faculty's authenticated credentials
         const result = await sendThankingEmail({
             guestEmail: emailToSend,
             guestName: workshop.speakerName,
             eventTitle: workshop.title,
             eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
-            organizerName: req.user.name || (workshop.submittedBy ? workshop.submittedBy.name : "Faculty Coordinator"),
+            organizerName: facultySenderName,
             deptName: workshop.department || req.user.department,
             institutionName: letterData?.institutionName || "Dr. D. Y. PATIL COLLEGE OF ENGINEERING & INNOVATION",
             customHtml: customHtml || undefined,
             customMessage: customMessage || undefined,
             attachmentBase64: finalAttachment || workshop.scannedThankingLetter || undefined,
-            senderEmail: req.user.email
+            senderEmail: facultySenderEmail,
+            facultyUser: authenticatedFaculty
         });
 
         workshop.guestEmail = emailToSend;
@@ -958,10 +996,20 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             message: `Official thanking message and appreciation letter (PDF format) dispatched to ${emailToSend} successfully 📧📄✅`,
             workshop,
             hasPdfAttachment: Boolean(finalAttachment),
+            senderEmail: facultySenderEmail,
+            authenticatedAs: result.authenticatedAs,
+            mode: result.mode,
             result
         });
     } catch (err) {
         console.error(err);
+        if (err.code === "FACULTY_EMAIL_NOT_CONFIGURED") {
+            return res.status(400).json({
+                error: err.message,
+                code: "FACULTY_EMAIL_NOT_CONFIGURED",
+                facultyEmail: req.user?.email
+            });
+        }
         res.status(500).json({ error: err.message || "Failed to dispatch thanking email ❌" });
     }
 });

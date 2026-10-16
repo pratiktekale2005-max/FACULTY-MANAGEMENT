@@ -49,8 +49,12 @@ const requireRole = (allowedRoles) => {
     return [
         authenticateUser,
         (req, res, next) => {
-            if (!allowedRoles.includes(req.user.role)) {
-                return res.status(403).json({ error: `Forbidden: This resource requires one of the following roles: [${allowedRoles.join(", ")}] ❌` });
+            const userRole = (req.user?.role || "").trim().toLowerCase();
+            const normalizedAllowed = allowedRoles.map(r => r.trim().toLowerCase());
+            if (!normalizedAllowed.includes(userRole)) {
+                return res.status(403).json({ 
+                    error: `Forbidden: This resource requires one of the following roles: [${allowedRoles.join(", ")}]. Current session is authenticated as '${req.user?.name || "User"}' with role '${req.user?.role || "Unknown"}'. Please re-login with an authorized account. ❌` 
+                });
             }
             next();
         }

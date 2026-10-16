@@ -257,29 +257,159 @@ const sendPasswordCredentialsEmail = async ({
     }
 };
 
-const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, time, venue, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail }) => {
-    const emailUser = process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_PASS;
+/**
+ * Resolves an authenticated SMTP transporter for a faculty member.
+ * 
+ * Hierarchy:
+ * 1. Individual Faculty Credentials (Option A):
+ *    If the faculty has configured their email sending credentials (e.g. Gmail App Password, college SMTP),
+ *    a dedicated transporter is authenticated directly as that faculty's email address.
+ * 
+ * 2. Organization / Domain SMTP Relay (Option B):
+ *    If a domain relay is configured in environment (SMTP_RELAY_HOST), connects to the relay which is
+ *    authorized to send for the college domain without Gmail rewriting.
+ * 
+ * 3. Primary Admin Account:
+ *    Only if the authenticated user's email matches process.env.EMAIL_USER.
+ * 
+ * 4. Error Handling:
+ *    If no authorized sending credentials exist, it STRICTLY refuses to silently send through
+ *    process.env.EMAIL_USER. It returns a clear, actionable error.
+ */
+const getFacultyTransporter = async ({ facultyUser, facultyEmail }) => {
+    const targetEmail = (facultyEmail || facultyUser?.email || "").trim().toLowerCase();
 
+    // 1. Option A: Faculty-specific authorized credentials (stored on User record)
+    const emailSettings = facultyUser?.emailSettings;
+    const authPass = emailSettings?.appPassword || emailSettings?.password;
+
+    if (emailSettings?.configured && authPass) {
+        const authUser = (emailSettings.email || targetEmail).trim();
+        let transportConfig;
+        if (emailSettings.host) {
+            transportConfig = {
+                host: emailSettings.host,
+                port: Number(emailSettings.port) || 587,
+                secure: Boolean(emailSettings.secure),
+                auth: { user: authUser, pass: authPass }
+            };
+        } else {
+            transportConfig = {
+                service: emailSettings.service || "gmail",
+                auth: { user: authUser, pass: authPass }
+            };
+        }
+
+        const transporter = nodemailer.createTransport(transportConfig);
+        return {
+            transporter,
+            authenticatedEmail: authUser,
+            fromAddress: authUser,
+            mode: "faculty_credentials"
+        };
+    }
+
+    // 2. Option B: Organization / College Domain SMTP Relay
+    if (process.env.SMTP_RELAY_HOST) {
+        const relayConfig = {
+            host: process.env.SMTP_RELAY_HOST,
+            port: Number(process.env.SMTP_RELAY_PORT) || 587,
+            secure: process.env.SMTP_RELAY_SECURE === "true",
+            auth: process.env.SMTP_RELAY_USER ? {
+                user: process.env.SMTP_RELAY_USER,
+                pass: process.env.SMTP_RELAY_PASS
+            } : undefined
+        };
+        const transporter = nodemailer.createTransport(relayConfig);
+        return {
+            transporter,
+            authenticatedEmail: process.env.SMTP_RELAY_USER || targetEmail,
+            fromAddress: targetEmail,
+            mode: "domain_relay"
+        };
+    }
+
+    // 3. Central Institutional Relay / College SMTP Dispatch (No individual passwords needed!)
+    const centralUser = (process.env.SMTP_USER || process.env.EMAIL_USER || "").trim();
+    const centralPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+
+    if (centralUser && centralPass) {
+        let transportConfig;
+        if (process.env.SMTP_HOST) {
+            transportConfig = {
+                host: process.env.SMTP_HOST,
+                port: Number(process.env.SMTP_PORT) || 587,
+                secure: process.env.SMTP_SECURE === "true",
+                auth: { user: centralUser, pass: centralPass }
+            };
+        } else {
+            transportConfig = {
+                service: "gmail",
+                auth: { user: centralUser, pass: centralPass }
+            };
+        }
+
+        const transporter = nodemailer.createTransport(transportConfig);
+        return {
+            transporter,
+            authenticatedEmail: centralUser,
+            fromAddress: centralUser,
+            replyToAddress: targetEmail || centralUser,
+            mode: "institutional_central_relay"
+        };
+    }
+
+    // 4. Fallback if no credentials exist at all
+    const err = new Error(
+        "Institutional email service is not configured. Please set EMAIL_USER and EMAIL_PASS in backend/.env."
+    );
+    err.code = "SERVER_EMAIL_NOT_CONFIGURED";
+    throw err;
+};
+
+const verifyFacultyCredentials = async ({ service = "gmail", host, port, secure, user, pass, email, appPassword }) => {
+    const authUser = (user || email || "").trim();
+    const authPass = (pass || appPassword || "").trim().replace(/\s+/g, "");
+    if (!authUser || !authPass) {
+        throw new Error("Both email username and app password are required for verification ❌");
+    }
+    let config;
+    if (host) {
+        config = { host, port: Number(port) || 587, secure: Boolean(secure), auth: { user: authUser, pass: authPass } };
+    } else {
+        config = { service, auth: { user: authUser, pass: authPass } };
+    }
+    const testTransporter = nodemailer.createTransport(config);
+    try {
+        await testTransporter.verify();
+        return { success: true };
+    } catch (err) {
+        return { success: false, error: err.message };
+    }
+};
+
+const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, time, venue, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail, facultyUser }) => {
     if (!guestEmail) {
         throw new Error("Guest email address is required to dispatch invitation ❌");
     }
 
-    if (!emailUser || !emailPass) {
-        console.warn("⚠️ SMTP Credentials (EMAIL_USER/EMAIL_PASS) are missing in environment variables. Email logged to console.");
-        console.log(`[MOCK EMAIL DISPATCH] Invitation for "${eventTitle}" successfully prepared and addressed to ${guestEmail} (${guestName}).`);
-        return { success: true, simulated: true, recipient: guestEmail };
+    const { transporter, authenticatedEmail, fromAddress, replyToAddress, mode } = await getFacultyTransporter({
+        facultyUser,
+        facultyEmail: senderEmail
+    });
+
+    const cleanName = organizerName ? organizerName.replace(/"/g, "'").trim() : "";
+    let senderDisplay;
+    if (mode === "faculty_credentials" || mode === "domain_relay") {
+        senderDisplay = cleanName ? `"${cleanName}" <${fromAddress}>` : fromAddress;
+    } else {
+        // Institutional central relay: display faculty name with institutional authority
+        senderDisplay = cleanName 
+            ? `"${cleanName} (Faculty Coordinator)" <${authenticatedEmail}>`
+            : `"Dr. D. Y. Patil College of Engineering & Innovation" <${authenticatedEmail}>`;
     }
 
     try {
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: emailUser,
-                pass: emailPass,
-            },
-        });
-
         const defaultHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
                 <div style="border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px;">
@@ -311,14 +441,14 @@ const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventTyp
                 </p>
                 <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
                     <p style="margin: 0;">Warm regards,<br/><strong>${organizerName || "Head of Department & Event Committee"}</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
-                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #6366f1;">Sender Email: ${senderEmail}</p>` : ''}
+                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #6366f1;">Coordinator Direct Email: ${senderEmail}</p>` : ''}
                 </div>
             </div>
         `;
 
         const mailOptions = {
-            from: organizerName ? `"${organizerName} via ${institutionName || "EduCRM Portal"}" <${emailUser}>` : `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
-            replyTo: senderEmail || emailUser,
+            from: senderDisplay,
+            replyTo: replyToAddress || senderEmail || fromAddress,
             to: guestEmail,
             subject: `Official Academic Invitation: ${eventTitle} (${eventType || "Workshop"})`,
             html: customHtml || defaultHtml,
@@ -336,37 +466,39 @@ const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventTyp
         }
 
         await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL SERVICE] Successfully dispatched invitation to ${guestEmail} 📧`);
-        return { success: true, recipient: guestEmail };
+        console.log(`[EMAIL SERVICE] Successfully dispatched invitation to ${guestEmail} authenticated as ${authenticatedEmail} (${mode}) 📧`);
+        return { success: true, recipient: guestEmail, from: senderDisplay, replyTo: mailOptions.replyTo, authenticatedAs: authenticatedEmail, mode };
     } catch (err) {
+        if (err.code === "FACULTY_EMAIL_NOT_CONFIGURED") {
+            throw err;
+        }
         console.error("[EMAIL SERVICE] SMTP error while dispatching invitation:", err);
         throw new Error(err.message || "Failed to dispatch invitation email via SMTP ❌");
     }
 };
 
-const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail }) => {
-    const emailUser = process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_PASS;
-
+const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType, date, organizerName, deptName, institutionName, customHtml, customMessage, attachmentBase64, senderEmail, facultyUser }) => {
     if (!guestEmail) {
         throw new Error("Guest email address is required to dispatch thanking letter ❌");
     }
 
-    if (!emailUser || !emailPass) {
-        console.warn("⚠️ SMTP Credentials (EMAIL_USER/EMAIL_PASS) are missing in environment variables. Email logged to console.");
-        console.log(`[MOCK EMAIL DISPATCH] Appreciation letter for "${eventTitle}" successfully prepared and addressed to ${guestEmail} (${guestName}).`);
-        return { success: true, simulated: true, recipient: guestEmail };
+    const { transporter, authenticatedEmail, fromAddress, replyToAddress, mode } = await getFacultyTransporter({
+        facultyUser,
+        facultyEmail: senderEmail
+    });
+
+    const cleanName = organizerName ? organizerName.replace(/"/g, "'").trim() : "";
+    let senderDisplay;
+    if (mode === "faculty_credentials" || mode === "domain_relay") {
+        senderDisplay = cleanName ? `"${cleanName}" <${fromAddress}>` : fromAddress;
+    } else {
+        // Institutional central relay: display faculty name with institutional authority
+        senderDisplay = cleanName 
+            ? `"${cleanName} (Faculty Coordinator)" <${authenticatedEmail}>`
+            : `"Dr. D. Y. Patil College of Engineering & Innovation" <${authenticatedEmail}>`;
     }
 
     try {
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: emailUser,
-                pass: emailPass,
-            },
-        });
-
         const defaultHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
                 <div style="border-bottom: 2px solid #059669; padding-bottom: 15px; margin-bottom: 20px;">
@@ -388,7 +520,7 @@ const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType,
                     <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>📅 Date of Conduction:</strong> ${date || "Recently Conducted"}</p>
                     <p style="margin: 4px 0; font-size: 13px; color: #374151;"><strong>👤 Facilitated by:</strong> ${organizerName || "Department Faculty"}</p>
                 </div>
-                <div style="background-color: #ecfdf5; border: 1px dashed #10b981; padding: 12px 15px; border-radius: 8px; margin: 20px 0; font-size: 12.5px; color: #065f46;">
+                <div style="background-color: #ecfdf5; border-1px dashed #10b981; padding: 12px 15px; border-radius: 8px; margin: 20px 0; font-size: 12.5px; color: #065f46;">
                     <strong>📄 Official Letter Attached:</strong> Please find your official <strong>Letter of Appreciation in PDF format</strong> attached with this email.
                 </div>
                 <p style="font-size: 13px; color: #475569; line-height: 1.5;">
@@ -397,14 +529,14 @@ const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType,
                 </p>
                 <div style="border-top: 1px solid #f1f5f9; margin-top: 25px; padding-top: 15px; font-size: 11px; color: #94a3b8; line-height: 1.4;">
                     <p style="margin: 0;">With sincere regards,<br/><strong>${organizerName || "Department Faculty"} & Principal</strong><br/>${institutionName || "EduCRM Institutional Hub"}</p>
-                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #059669;">Sender Email: ${senderEmail}</p>` : ''}
+                    ${senderEmail ? `<p style="margin: 4px 0 0 0; font-size: 11px; color: #059669;">Coordinator Direct Email: ${senderEmail}</p>` : ''}
                 </div>
             </div>
         `;
 
         const mailOptions = {
-            from: organizerName ? `"${organizerName} via ${institutionName || "EduCRM Portal"}" <${emailUser}>` : `"${institutionName || "EduCRM Academic Portal"}" <${emailUser}>`,
-            replyTo: senderEmail || emailUser,
+            from: senderDisplay,
+            replyTo: replyToAddress || senderEmail || fromAddress,
             to: guestEmail,
             subject: `Letter of Gratitude & Appreciation: ${eventTitle}`,
             html: customHtml || defaultHtml,
@@ -422,9 +554,12 @@ const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType,
         }
 
         await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL SERVICE] Successfully dispatched thanking letter to ${guestEmail} 📧`);
-        return { success: true, recipient: guestEmail };
+        console.log(`[EMAIL SERVICE] Successfully dispatched thanking letter to ${guestEmail} authenticated as ${authenticatedEmail} (${mode}) 📧`);
+        return { success: true, recipient: guestEmail, from: senderDisplay, replyTo: mailOptions.replyTo, authenticatedAs: authenticatedEmail, mode };
     } catch (err) {
+        if (err.code === "FACULTY_EMAIL_NOT_CONFIGURED") {
+            throw err;
+        }
         console.error("[EMAIL SERVICE] SMTP error while dispatching thanking letter:", err);
         throw new Error(err.message || "Failed to dispatch appreciation letter via SMTP ❌");
     }
@@ -689,6 +824,8 @@ module.exports = {
     sendThankingEmail,
     sendPasswordCredentialsEmail,
     sendWorkshopApprovalEmail,
-    sendOfficialLetterEmail
+    sendOfficialLetterEmail,
+    getFacultyTransporter,
+    verifyFacultyCredentials
 };
 

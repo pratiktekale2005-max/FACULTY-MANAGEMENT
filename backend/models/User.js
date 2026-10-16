@@ -22,6 +22,16 @@ const userSchema = new mongoose.Schema({
     employeeId: { type: String, sparse: true },
     status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "ACTIVE" },
     password: { type: String, select: false, default: null },
+    emailSettings: {
+        configured: { type: Boolean, default: false },
+        service: { type: String, default: "gmail" },
+        email: { type: String, default: "" },
+        appPassword: { type: String, select: false, default: null },
+        host: { type: String, default: "" },
+        port: { type: Number, default: 587 },
+        secure: { type: Boolean, default: false },
+        verifiedAt: { type: Date, default: null }
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     createdAt: { type: Date, default: Date.now }
 });
@@ -37,6 +47,9 @@ userSchema.set("toJSON", {
     virtuals: true,
     transform: (doc, ret) => {
         delete ret.password;
+        if (ret.emailSettings) {
+            delete ret.emailSettings.appPassword;
+        }
         return ret;
     }
 });
@@ -44,6 +57,9 @@ userSchema.set("toObject", {
     virtuals: true,
     transform: (doc, ret) => {
         delete ret.password;
+        if (ret.emailSettings) {
+            delete ret.emailSettings.appPassword;
+        }
         return ret;
     }
 });

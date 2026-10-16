@@ -95,6 +95,14 @@ export default function WorkshopLetterModal({
     const [isSending, setIsSending] = useState(false);
     const [sendSuccessMsg, setSendSuccessMsg] = useState("");
     const [sendErrorMsg, setSendErrorMsg] = useState("");
+
+    // Faculty email sender configuration state
+    const [facultyEmailConfig, setFacultyEmailConfig] = useState(null);
+    const [showQuickEmailConfig, setShowQuickEmailConfig] = useState(false);
+    const [quickAppPassword, setQuickAppPassword] = useState("");
+    const [showQuickPasswordText, setShowQuickPasswordText] = useState(false);
+    const [isSavingQuickConfig, setIsSavingQuickConfig] = useState(false);
+    const [quickConfigError, setQuickConfigError] = useState("");
     
     // Extra Feature: Attach Created Letter in PDF format
     const [attachCreatedPdf, setAttachCreatedPdf] = useState(true);
@@ -111,6 +119,23 @@ export default function WorkshopLetterModal({
     const canvasRef = useRef(null);
     const fileInputRef = useRef(null);
     const modalBodyRef = useRef(null);
+
+    // Fetch faculty email configuration status on load
+    useEffect(() => {
+        if (currentUser) {
+            api.get("/faculty/me/email-settings")
+                .then(res => {
+                    setFacultyEmailConfig(res);
+                    if (!res?.configured) {
+                        setShowQuickEmailConfig(true);
+                    }
+                })
+                .catch(() => {
+                    setFacultyEmailConfig({ configured: false });
+                    setShowQuickEmailConfig(true);
+                });
+        }
+    }, [currentUser]);
 
     // Prevent background scrolling and support Escape key
     useEffect(() => {
@@ -385,9 +410,41 @@ export default function WorkshopLetterModal({
             if (onUpdated) onUpdated();
         } catch (err) {
             console.error("Failed to dispatch email:", err);
-            setSendErrorMsg(err.response?.data?.error || err.message || "Failed to send email. Check SMTP settings.");
+            const errorMsg = err.response?.data?.error || err.message || "Failed to send email. Check SMTP settings.";
+            setSendErrorMsg(errorMsg);
+            if (errorMsg.toLowerCase().includes("not configured for sending emails") || errorMsg.toLowerCase().includes("please configure")) {
+                setShowQuickEmailConfig(true);
+            }
         } finally {
             setIsSending(false);
+        }
+    };
+
+    const handleSaveQuickConfig = async (e) => {
+        if (e) e.preventDefault();
+        if (!quickAppPassword || !quickAppPassword.trim()) {
+            setQuickConfigError("Please enter your 16-character Google App Password.");
+            return;
+        }
+        setIsSavingQuickConfig(true);
+        setQuickConfigError("");
+        try {
+            const res = await api.put("/faculty/me/email-settings", {
+                service: "gmail",
+                email: currentUser?.email,
+                appPassword: quickAppPassword.trim().replace(/\s+/g, ""),
+                configured: true
+            });
+            setFacultyEmailConfig(res.emailSettings || { configured: true, email: currentUser?.email });
+            setShowQuickEmailConfig(false);
+            setQuickAppPassword("");
+            setSendErrorMsg("");
+            setSendSuccessMsg("Authorized college email credentials saved and verified! ✅ You can now dispatch your letter.");
+        } catch (err) {
+            console.error("Save quick email config error:", err);
+            setQuickConfigError(err.response?.data?.error || err.message || "Failed to verify credentials. Please check your App Password.");
+        } finally {
+            setIsSavingQuickConfig(false);
         }
     };
 
@@ -1115,15 +1172,129 @@ export default function WorkshopLetterModal({
                                     </div>
                                 )}
 
-                                <div className="space-y-4">
-                                    {/* Sender Identity Preview */}
-                                    <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1">
-                                        <p className="text-[10px] text-slate-400 uppercase font-bold">Logged-in Sender Identity</p>
-                                        <p className="text-slate-200 font-semibold text-xs">
-                                            {currentUser?.name || organizerName} ({currentUser?.role === "Principal" ? "Principal" : currentUser?.role === "HOD" ? "Vice Principal / CE - HOD" : "Faculty"})
-                                        </p>
-                                        <p className="text-[10px] text-indigo-400">Reply-To / Sender: {currentUser?.email || "Registered Account Email"}</p>
+                                {/* Warning banner if email is not configured yet */}
+                                {!sendErrorMsg && facultyEmailConfig && !facultyEmailConfig.configured && (
+                                    <div className="mb-4 p-3.5 bg-rose-950/80 border border-rose-600/80 rounded-xl text-rose-200 text-xs flex items-start space-x-2.5">
+                                        <span className="text-base leading-none">⚠️</span>
+                                        <div>
+                                            <p className="font-semibold text-rose-200">
+                                                This faculty account is not configured for sending emails. Please configure the authorized college email account.
+                                            </p>
+                                        </div>
                                     </div>
+                                )}
+
+                                <div className="space-y-4">
+                                    {/* Sender Identity Card */}
+                                    <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Logged-in Sender Identity</p>
+                                                <p className="text-slate-100 font-bold text-sm">
+                                                    {currentUser?.name || organizerName} ({currentUser?.role === "Principal" ? "Principal" : currentUser?.role === "HOD" ? "Vice Principal / CE - HOD" : "Faculty"})
+                                                </p>
+                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                    Account email: <span className="text-indigo-300 font-mono">{currentUser?.email || "Registered Account Email"}</span>
+                                                </p>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-1.5">
+                                                {facultyEmailConfig?.configured ? (
+                                                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-950/80 text-emerald-300 border-emerald-700/60 flex items-center gap-1">
+                                                        <span>🛡️</span> Sender Ready
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowQuickEmailConfig(!showQuickEmailConfig)}
+                                                        className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-amber-950/90 text-amber-300 border-amber-600/70 flex items-center gap-1 hover:bg-amber-900/80 transition cursor-pointer shadow"
+                                                    >
+                                                        <span>⚠️</span> Sender Setup Required
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowQuickEmailConfig(!showQuickEmailConfig)}
+                                                    className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+                                                >
+                                                    {showQuickEmailConfig ? "Close Setup" : (facultyEmailConfig?.configured ? "Update App Password" : "Configure Credentials")}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Email / Google App Password Setup Form */}
+                                    {showQuickEmailConfig && (
+                                        <div className="bg-[#131b2e] border border-indigo-500/60 rounded-xl p-4 shadow-2xl space-y-3.5 relative animate-in fade-in duration-200">
+                                            <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+                                                <h5 className="text-xs font-bold text-white flex items-center gap-2">
+                                                    <span className="text-sm">🔐</span> Authorized College Email Credentials
+                                                </h5>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setShowQuickEmailConfig(false)}
+                                                    className="text-slate-400 hover:text-white text-sm p-1 rounded hover:bg-slate-800 transition"
+                                                    title="Close setup"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+
+                                            <p className="text-xs text-slate-300 leading-relaxed">
+                                                To prevent emails from showing "via college admin", enter your 16-character <strong>Google App Password</strong> for <strong className="text-indigo-300 font-mono">{currentUser?.email || "your account"}</strong>.
+                                            </p>
+
+                                            {quickConfigError && (
+                                                <div className="p-2.5 bg-rose-950/80 border border-rose-500/70 rounded-lg text-rose-300 text-xs flex items-center gap-2">
+                                                    <span>⚠️</span>
+                                                    <span>{quickConfigError}</span>
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                                                    Google App Password (16 characters) <span className="text-rose-400">*</span>
+                                                </label>
+                                                <div className="flex flex-col sm:flex-row gap-2">
+                                                    <div className="relative flex-1">
+                                                        <input
+                                                            type={showQuickPasswordText ? "text" : "password"}
+                                                            autoComplete="off"
+                                                            value={quickAppPassword}
+                                                            onChange={(e) => setQuickAppPassword(e.target.value)}
+                                                            placeholder="e.g. abcd efgh ijkl mnop"
+                                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2.5 text-xs text-indigo-300 font-mono tracking-wider focus:outline-none focus:border-indigo-500 pr-16"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowQuickPasswordText(!showQuickPasswordText)}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-slate-400 hover:text-slate-200 px-2 py-1"
+                                                        >
+                                                            {showQuickPasswordText ? "Hide" : "Show"}
+                                                        </button>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSaveQuickConfig}
+                                                        disabled={isSavingQuickConfig || !quickAppPassword.trim()}
+                                                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5 shrink-0"
+                                                    >
+                                                        {isSavingQuickConfig ? (
+                                                            <>
+                                                                <span className="inline-block animate-spin">⏳</span>
+                                                                <span>Verifying...</span>
+                                                            </>
+                                                        ) : (
+                                                            <span>Verify &amp; Save</span>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-[11px] text-slate-400">
+                                                Visit <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline hover:text-indigo-300 font-medium">myaccount.google.com/apppasswords</a> to create an App Password. Never use your main Gmail password.
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <div>
                                         <label className="block text-xs font-medium text-slate-300 mb-1">

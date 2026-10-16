@@ -24,15 +24,15 @@ async function validateHodAssignment(departmentId, excludeUserId = null) {
     return !!existingHod;
 }
 
-// ================= GET ALL USERS (PRINCIPAL & HOD) =================
-router.get("/", requireRole(["Principal", "HOD"]), async (req, res) => {
+// ================= GET ALL USERS (PRINCIPAL, HOD & FACULTY) =================
+router.get("/", requireRole(["Principal", "HOD", "Faculty"]), async (req, res) => {
     try {
         const { search, role, departmentId } = req.query;
         const query = { organizationId: req.user.organizationId };
 
         // 1. Role-based Department Isolation:
         // HOD can ONLY view faculties from their own department and NEVER the Principal.
-        // Principal has global visibility across all institution departments and members.
+        // Principal and Faculty can view their institution members.
         if (req.user.role === "HOD") {
             query.role = { $ne: "Principal" };
 
@@ -47,7 +47,7 @@ router.get("/", requireRole(["Principal", "HOD"]), async (req, res) => {
                 query.department = req.user.department;
             }
         } else {
-            // Principal can optionally filter by department
+            // Principal/Faculty can optionally filter by department
             if (departmentId && departmentId !== "All" && departmentId !== "all" && departmentId !== "ALL" && departmentId.trim() !== "") {
                 query.departmentId = departmentId.trim();
             }

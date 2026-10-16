@@ -4,8 +4,24 @@ import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 
 function App() {
-  const [step, setStep] = useState(1);
-  const [user, setUser] = useState(null);
+  const [step, setStep] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("crm_user");
+      const token = localStorage.getItem("accessToken");
+      return (savedUser && token) ? 3 : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem("crm_user");
+      const token = localStorage.getItem("accessToken");
+      return (savedUser && token) ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
 
   // Sync theme with document element and body
@@ -25,10 +41,10 @@ function App() {
   };
 
   const handleLoginSuccess = (userData, accessToken, refreshToken) => {
-    setUser(userData);
     localStorage.setItem("crm_user", JSON.stringify(userData));
     if (accessToken) localStorage.setItem("accessToken", accessToken);
     if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+    setUser(userData);
     setStep(3);
   };
 

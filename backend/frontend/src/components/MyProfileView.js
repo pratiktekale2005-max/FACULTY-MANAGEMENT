@@ -24,7 +24,23 @@ function MyProfileView({ currentUser, onRefresh }) {
         resumeBase64: ""
     });
 
-    // Load current user's profile details from backend
+    // Email sending settings state
+    const [emailSettings, setEmailSettings] = useState({ configured: false });
+    const [showEmailConfig, setShowEmailConfig] = useState(false);
+    const [showAppPassword, setShowAppPassword] = useState(false);
+    const [emailForm, setEmailForm] = useState({
+        service: "gmail",
+        email: "",
+        appPassword: "",
+        host: "",
+        port: 587,
+        secure: false
+    });
+    const [isTestingEmail, setIsTestingEmail] = useState(false);
+    const [isSavingEmail, setIsSavingEmail] = useState(false);
+    const [emailTestResult, setEmailTestResult] = useState(null);
+
+    // Load current user's profile details and email settings from backend
     const loadProfile = async () => {
         try {
             setLoading(true);
@@ -47,6 +63,24 @@ function MyProfileView({ currentUser, onRefresh }) {
                 photoBase64: fac.photoPath || "",
                 resumeBase64: fac.resumePath || ""
             });
+
+            // Load email configuration
+            try {
+                const settingsData = await api.get("/faculty/me/email-settings");
+                if (settingsData) {
+                    setEmailSettings(settingsData);
+                    setEmailForm(prev => ({
+                        ...prev,
+                        service: settingsData.service || "gmail",
+                        email: settingsData.email || fac.email || currentUser?.email || "",
+                        host: settingsData.host || "",
+                        port: settingsData.port || 587,
+                        secure: !!settingsData.secure
+                    }));
+                }
+            } catch (errSettings) {
+                console.warn("Could not load email settings:", errSettings);
+            }
         } catch (err) {
             console.error("Failed to load profile:", err);
             // Fallback to currentUser prop
@@ -61,6 +95,10 @@ function MyProfileView({ currentUser, onRefresh }) {
                 skills: currentUser.skills || "",
                 achievements: currentUser.achievements || "",
                 photoBase64: currentUser.photoPath || ""
+            }));
+            setEmailForm(prev => ({
+                ...prev,
+                email: currentUser?.email || ""
             }));
         } finally {
             setLoading(false);
@@ -109,6 +147,64 @@ function MyProfileView({ currentUser, onRefresh }) {
             setStatusMsg({ type: "error", text: err.message || "Failed to update profile details ❌" });
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    // Test email connection
+    const handleTestEmailSettings = async () => {
+        setIsTestingEmail(true);
+        setEmailTestResult(null);
+        try {
+            const res = await api.post("/faculty/me/test-email-settings", emailForm);
+            setEmailTestResult({ type: "success", text: res.message || "Connection verified successfully! ✅" });
+        } catch (err) {
+            console.error("Test email connection failed:", err);
+            setEmailTestResult({ type: "error", text: err.message || "Failed to verify mail credentials ❌" });
+        } finally {
+            setIsTestingEmail(false);
+        }
+    };
+
+    // Save and verify email settings
+    const handleSaveEmailSettings = async (e) => {
+        if (e) e.preventDefault();
+        setIsSavingEmail(true);
+        setEmailTestResult(null);
+        try {
+            const res = await api.put("/faculty/me/email-settings", {
+                ...emailForm,
+                configured: true
+            });
+            setEmailSettings(res.emailSettings || { configured: true, ...emailForm });
+            setEmailTestResult({ type: "success", text: res.message || "Email credentials saved and verified! ✅" });
+            setShowEmailConfig(false);
+            setStatusMsg({ type: "success", text: "Authorized college email credentials saved successfully! ✅" });
+        } catch (err) {
+            console.error("Save email settings failed:", err);
+            setEmailTestResult({ type: "error", text: err.message || "Failed to save email settings ❌" });
+        } finally {
+            setIsSavingEmail(false);
+        }
+    };
+
+    // Remove email credentials
+    const handleRemoveEmailSettings = async () => {
+        if (!window.confirm("Are you sure you want to remove your email credentials? Workshop email sending will be blocked until configured again.")) {
+            return;
+        }
+        setIsSavingEmail(true);
+        try {
+            await api.put("/faculty/me/email-settings", { configured: false });
+            setEmailSettings({ configured: false });
+            setEmailForm(prev => ({ ...prev, appPassword: "" }));
+            setEmailTestResult(null);
+            setShowEmailConfig(false);
+            setStatusMsg({ type: "success", text: "Email sending credentials removed." });
+        } catch (err) {
+            console.error("Remove email settings failed:", err);
+            setStatusMsg({ type: "error", text: err.message || "Failed to remove email settings ❌" });
+        } finally {
+            setIsSavingEmail(false);
         }
     };
 
@@ -243,6 +339,239 @@ function MyProfileView({ currentUser, onRefresh }) {
                         )}
                     </div>
                 </div>
+            </div>
+
+            {/* AUTHORIZED EMAIL SENDER & SMTP CONFIGURATION CARD */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                            emailSettings.configured
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                        }`}>
+                            {emailSettings.configured ? "🛡️" : "✉️"}
+                        </div>
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-sm font-bold text-slate-100">
+                                    Authorized College Email & Sender Identity
+                                </h3>
+                                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                    emailSettings.configured
+                                        ? "bg-emerald-950/80 text-emerald-300 border-emerald-700/60"
+                                        : "bg-amber-950/80 text-amber-300 border-amber-700/60"
+                                }`}>
+                                    {emailSettings.configured ? "✅ Authenticated Sender Active" : "⚠️ Not Configured"}
+                                </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                                Used for Workshops & Seminars invitation and thanking letters. Emails authenticate as your authorized college account rather than the system account.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowEmailConfig(!showEmailConfig);
+                            setEmailTestResult(null);
+                        }}
+                        className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-center"
+                    >
+                        <span>{showEmailConfig ? "✕ Close Setup" : (emailSettings.configured ? "⚙️ Manage Credentials" : "➕ Configure Email Sender")}</span>
+                    </button>
+                </div>
+
+                {/* Collapsed Status Summary */}
+                {!showEmailConfig && (
+                    <div className="text-xs text-slate-300">
+                        {emailSettings.configured ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
+                                <div>
+                                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Authorized Sender Address</span>
+                                    <span className="font-semibold text-emerald-300 font-mono">{emailSettings.email}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Provider / Connection</span>
+                                    <span className="font-medium text-slate-300 capitalize">{emailSettings.service === "gmail" ? "Gmail / Google Workspace" : (emailSettings.host || "Custom SMTP")}</span>
+                                </div>
+                                <div>
+                                    <span className="text-[10px] text-slate-500 block uppercase font-bold">Verification Status</span>
+                                    <span className="text-emerald-400 text-[11px] font-medium">
+                                        ✓ Authenticated & Verified {emailSettings.verifiedAt ? new Date(emailSettings.verifiedAt).toLocaleDateString() : ""}
+                                    </span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-amber-950/20 border border-amber-800/40 p-3.5 rounded-xl text-amber-200/90 text-xs leading-relaxed flex items-start gap-2.5">
+                                <span className="text-amber-400 text-base">⚠️</span>
+                                <div>
+                                    <p className="font-semibold text-amber-300">Workshop email sending is currently blocked for this account.</p>
+                                    <p className="text-[11px] text-amber-200/70 mt-0.5">
+                                        To ensure guest speaker invitation and thanking letters are sent directly from your verified identity (and never display "via college admin"), please configure your 16-character Google App Password or college SMTP account.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Expanded Configuration Form */}
+                {showEmailConfig && (
+                    <form onSubmit={handleSaveEmailSettings} className="bg-slate-950/70 border border-slate-800/90 p-4 md:p-5 rounded-xl space-y-4 animate-scale-up">
+                        {emailTestResult && (
+                            <div className={`p-3 rounded-lg text-xs font-medium flex items-center justify-between ${
+                                emailTestResult.type === "success"
+                                    ? "bg-emerald-950/80 border border-emerald-600/60 text-emerald-300"
+                                    : "bg-rose-950/80 border border-rose-600/60 text-rose-300"
+                            }`}>
+                                <span>{emailTestResult.text}</span>
+                                <button type="button" onClick={() => setEmailTestResult(null)} className="text-slate-400 hover:text-white font-bold ml-2">✕</button>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mail Service / Provider</label>
+                                <select
+                                    value={emailForm.service}
+                                    onChange={(e) => setEmailForm({ ...emailForm, service: e.target.value })}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                >
+                                    <option value="gmail">Gmail / Google Workspace (Recommended)</option>
+                                    <option value="custom">Custom SMTP Server (College Server, Office 365, etc.)</option>
+                                </select>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Authorized College Email *</label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={emailForm.email}
+                                    onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })}
+                                    placeholder="faculty@college-domain.ac.in"
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                    <span>
+                                        {emailForm.service === "gmail" ? "Google App Password (16 characters) *" : "SMTP Password / App Secret *"}
+                                    </span>
+                                    {emailSettings.configured && (
+                                        <span className="text-[10px] text-slate-500 font-normal">
+                                            (Leave blank to keep current saved password)
+                                        </span>
+                                    )}
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type={showAppPassword ? "text" : "password"}
+                                        value={emailForm.appPassword}
+                                        onChange={(e) => setEmailForm({ ...emailForm, appPassword: e.target.value })}
+                                        placeholder={emailSettings.configured ? "•••••••••••••••• (Saved securely)" : "e.g. abcd efgh ijkl mnop"}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono pr-20"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAppPassword(!showAppPassword)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:text-slate-200"
+                                    >
+                                        {showAppPassword ? "Hide" : "Show"}
+                                    </button>
+                                </div>
+                                {emailForm.service === "gmail" && (
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                        💡 Google accounts with 2-Step Verification require an <strong>App Password</strong>. Visit{" "}
+                                        <a
+                                            href="https://myaccount.google.com/apppasswords"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-indigo-400 underline hover:text-indigo-300 font-medium"
+                                        >
+                                            myaccount.google.com/apppasswords
+                                        </a>{" "}
+                                        to generate a 16-letter password for "Mail". Never use your primary account password.
+                                    </p>
+                                )}
+                            </div>
+
+                            {emailForm.service === "custom" && (
+                                <>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">SMTP Host *</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={emailForm.host}
+                                            onChange={(e) => setEmailForm({ ...emailForm, host: e.target.value })}
+                                            placeholder="smtp.office365.com or mail.college.ac.in"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">SMTP Port *</label>
+                                        <input
+                                            type="number"
+                                            value={emailForm.port}
+                                            onChange={(e) => setEmailForm({ ...emailForm, port: Number(e.target.value) })}
+                                            placeholder="587"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-2 sm:col-span-2 pt-1">
+                                        <input
+                                            type="checkbox"
+                                            id="secureSmtp"
+                                            checked={emailForm.secure}
+                                            onChange={(e) => setEmailForm({ ...emailForm, secure: e.target.checked })}
+                                            className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700"
+                                        />
+                                        <label htmlFor="secureSmtp" className="text-xs text-slate-300 cursor-pointer">
+                                            Enable SSL/TLS Direct Encryption (Port 465)
+                                        </label>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-850">
+                            {emailSettings.configured && (
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveEmailSettings}
+                                    disabled={isSavingEmail}
+                                    className="px-3.5 py-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-800/60 rounded-xl transition"
+                                >
+                                    🗑️ Disconnect Credentials
+                                </button>
+                            )}
+
+                            <div className="flex items-center gap-2 ml-auto">
+                                <button
+                                    type="button"
+                                    onClick={handleTestEmailSettings}
+                                    disabled={isTestingEmail || (!emailForm.appPassword && !emailSettings.configured)}
+                                    className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition"
+                                >
+                                    {isTestingEmail ? "⏳ Testing Connection..." : "🔌 Test Connection"}
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    disabled={isSavingEmail}
+                                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-indigo-600/30"
+                                >
+                                    {isSavingEmail ? "Verifying & Saving..." : "💾 Save & Activate"}
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                )}
             </div>
 
             {/* Profile Content: Edit Form vs View Mode */}

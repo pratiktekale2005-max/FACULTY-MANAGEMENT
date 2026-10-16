@@ -35,8 +35,18 @@ router.get("/", authenticateUser, async (req, res) => {
             const faculties = await User.find(query).populate("departmentId").sort({ role: 1, name: 1 });
             res.json({ faculties });
         } else {
-            // Faculty only sees their own profile
-            const faculties = await User.find({ _id: req.user._id, organizationId: orgId }).populate("departmentId");
+            // Faculty sees department members in organization
+            const deptId = req.user.departmentId;
+            const query = { organizationId: orgId };
+            if (deptId) {
+                query.departmentId = deptId;
+            } else {
+                query._id = req.user._id;
+            }
+            if (filterRole && filterRole !== "ALL" && filterRole !== "All") {
+                query.role = filterRole;
+            }
+            const faculties = await User.find(query).populate("departmentId").sort({ role: 1, name: 1 });
             res.json({ faculties });
         }
     } catch (err) {
@@ -137,6 +147,182 @@ router.get("/:id/full-profile", authenticateUser, async (req, res) => {
     }
 });
 
+const { verifyFacultyCredentials } = require("../services/emailService");
+
+// ================= GET CURRENT USER PROFILE =================
+router.get("/me", authenticateUser, async (req, res) => {
+    try {
+        const user = await User.findOne({ _id: req.user._id, organizationId: req.user.organizationId }).populate("departmentId");
+        if (!user) {
+            return res.status(404).json({ error: "User profile not found ❌" });
+        }
+        res.json({ faculty: user });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error fetching personal profile ❌" });
+    }
+});
+
+// ================= GET CURRENT USER EMAIL SETTINGS =================
+router.get("/me/email-settings", authenticateUser, async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found ❌" });
+        }
+
+        const settings = user.emailSettings || {};
+        res.json({
+            configured: !!settings.configured,
+            email: settings.email || user.email,
+            service: settings.service || "gmail",
+            host: settings.host || "",
+            port: settings.port || 587,
+            secure: !!settings.secure,
+            verifiedAt: settings.verifiedAt || null
+        });
+    } catch (err) {
+        console.error("Fetch email settings error:", err);
+        res.status(500).json({ error: "Failed to load email settings ❌" });
+    }
+});
+
+// ================= TEST EMAIL CREDENTIALS =================
+router.post("/me/test-email-settings", authenticateUser, async (req, res) => {
+    try {
+        let { service, email, appPassword, host, port, secure } = req.body;
+
+        // If appPassword is not provided in body, check if already stored in user record
+        if (!appPassword) {
+            const user = await User.findById(req.user._id).select("+emailSettings.appPassword");
+            if (user?.emailSettings?.appPassword) {
+                appPassword = user.emailSettings.appPassword;
+                email = email || user.emailSettings.email || user.email;
+                service = service || user.emailSettings.service || "gmail";
+                host = host || user.emailSettings.host;
+                port = port || user.emailSettings.port;
+                secure = secure !== undefined ? secure : user.emailSettings.secure;
+            }
+        }
+
+        if (!email || !appPassword) {
+            return res.status(400).json({ 
+                error: "Both email address and password/App Password are required to test connection." 
+            });
+        }
+
+        const result = await verifyFacultyCredentials({
+            service: service || "gmail",
+            email: email.trim(),
+            appPassword: appPassword.trim().replace(/\s+/g, ""),
+            host: host ? host.trim() : undefined,
+            port: port ? Number(port) : undefined,
+            secure: Boolean(secure)
+        });
+
+        if (result.success) {
+            res.json({ 
+                success: true, 
+                message: `Connection verified successfully! Authenticated as ${email.trim()}.` 
+            });
+        } else {
+            res.status(400).json({ 
+                error: result.error || "Failed to verify SMTP credentials. Please check your email and App Password." 
+            });
+        }
+    } catch (err) {
+        console.error("Test email settings error:", err);
+        res.status(400).json({ 
+            error: err.message || "Failed to verify email credentials ❌" 
+        });
+    }
+});
+
+// ================= UPDATE EMAIL SETTINGS =================
+router.put("/me/email-settings", authenticateUser, async (req, res) => {
+    try {
+        const { configured, service = "gmail", email, appPassword, host, port, secure } = req.body;
+        const user = await User.findById(req.user._id).select("+emailSettings.appPassword");
+
+        if (!user) {
+            return res.status(404).json({ error: "User not found ❌" });
+        }
+
+        // If disabling configuration
+        if (configured === false) {
+            user.emailSettings = {
+                configured: false,
+                service: "gmail",
+                email: "",
+                appPassword: "",
+                host: "",
+                port: 587,
+                secure: false,
+                verifiedAt: null
+            };
+            await user.save();
+            return res.json({ 
+                message: "Email sending credentials removed successfully ✅",
+                emailSettings: { configured: false }
+            });
+        }
+
+        const effectiveEmail = (email || user.emailSettings?.email || user.email || "").trim();
+        const effectivePassword = (appPassword ? appPassword.trim().replace(/\s+/g, "") : user.emailSettings?.appPassword || "");
+
+        if (!effectiveEmail || !effectivePassword) {
+            return res.status(400).json({ 
+                error: "Both college/work email and App Password are required to configure email sending." 
+            });
+        }
+
+        // Verify credentials with SMTP before saving
+        const verifyRes = await verifyFacultyCredentials({
+            service,
+            email: effectiveEmail,
+            appPassword: effectivePassword,
+            host: host ? host.trim() : undefined,
+            port: port ? Number(port) : undefined,
+            secure: Boolean(secure)
+        });
+
+        if (!verifyRes.success) {
+            return res.status(400).json({ 
+                error: `SMTP Authentication failed: ${verifyRes.error}. Please check your App Password and try again.` 
+            });
+        }
+
+        user.emailSettings = {
+            configured: true,
+            service: service || "gmail",
+            email: effectiveEmail,
+            appPassword: effectivePassword,
+            host: host ? host.trim() : "",
+            port: port ? Number(port) : 587,
+            secure: Boolean(secure),
+            verifiedAt: new Date()
+        };
+
+        await user.save();
+
+        res.json({
+            message: `Email sending credentials configured and verified for ${effectiveEmail} ✅`,
+            emailSettings: {
+                configured: true,
+                service: user.emailSettings.service,
+                email: user.emailSettings.email,
+                host: user.emailSettings.host,
+                port: user.emailSettings.port,
+                secure: user.emailSettings.secure,
+                verifiedAt: user.emailSettings.verifiedAt
+            }
+        });
+    } catch (err) {
+        console.error("Save email settings error:", err);
+        res.status(500).json({ error: err.message || "Failed to update email settings ❌" });
+    }
+});
+
 // ================= GET SINGLE FACULTY PORTFOLIO =================
 router.get("/:id", authenticateUser, async (req, res) => {
     const { id } = req.params;
@@ -164,20 +350,6 @@ router.get("/:id", authenticateUser, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server error ❌" });
-    }
-});
-
-// ================= GET CURRENT USER PROFILE =================
-router.get("/me", authenticateUser, async (req, res) => {
-    try {
-        const user = await User.findOne({ _id: req.user._id, organizationId: req.user.organizationId }).populate("departmentId");
-        if (!user) {
-            return res.status(404).json({ error: "User profile not found ❌" });
-        }
-        res.json({ faculty: user });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error fetching personal profile ❌" });
     }
 });
 
