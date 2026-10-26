@@ -81,77 +81,46 @@ const request = async (url, options) => {
     return res.json();
 };
 
-// In-memory client-side cache for instantaneous tab switching and zero duplicate calls
-const requestCache = new Map();
-const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+// In-flight promise tracker for deduplicating concurrent active calls without stale caching
+const inFlightRequests = new Map();
 
-const invalidateCacheByPrefix = (prefix) => {
-    for (const key of requestCache.keys()) {
-        if (key.startsWith(prefix)) {
-            requestCache.delete(key);
-        }
-    }
-};
-
-const invalidateOnMutation = (endpoint) => {
-    const base = endpoint.split("?")[0].replace(/^\/api/, "").split("/").filter(Boolean)[0];
-    if (base) {
-        invalidateCacheByPrefix(`/${base}`);
-    }
-    // Cross-cutting module invalidations
-    if (endpoint.includes("/approvals") || endpoint.includes("/workshops") || endpoint.includes("/papers") || endpoint.includes("/activities") || endpoint.includes("/submissions") || endpoint.includes("/certifications")) {
-        invalidateCacheByPrefix("/approvals");
-        invalidateCacheByPrefix("/workshops");
-        invalidateCacheByPrefix("/papers");
-        invalidateCacheByPrefix("/activities");
-        invalidateCacheByPrefix("/submissions");
-        invalidateCacheByPrefix("/certifications");
-        invalidateCacheByPrefix("/analytics");
-        invalidateCacheByPrefix("/users");
-    }
-    if (endpoint.includes("/tasks")) {
-        invalidateCacheByPrefix("/tasks");
-        invalidateCacheByPrefix("/analytics");
-    }
-    if (endpoint.includes("/notifications")) {
-        invalidateCacheByPrefix("/notifications");
-    }
+const invalidateOnMutation = () => {
+    inFlightRequests.clear();
 };
 
 export const api = {
     clearCache() {
-        requestCache.clear();
+        inFlightRequests.clear();
     },
 
-    invalidateCache(prefix) {
-        invalidateCacheByPrefix(prefix);
+    invalidateCache() {
+        inFlightRequests.clear();
     },
 
-    async get(endpoint, params = {}, options = {}) {
+    async get(endpoint, params = {}) {
         const queryParams = { ...params };
         const queryStr = Object.keys(queryParams)
             .filter(k => queryParams[k] !== undefined && queryParams[k] !== null && queryParams[k] !== "")
             .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
             .join("&");
         const url = `${BASE_URL}${endpoint}${queryStr ? `?${queryStr}` : ""}`;
-        const cacheKey = `${endpoint}${queryStr ? `?${queryStr}` : ""}`;
+        const inFlightKey = url;
 
-        // Return from cache if valid and noCache is not forced
-        if (!options.noCache && requestCache.has(cacheKey)) {
-            const cached = requestCache.get(cacheKey);
-            const isFresh = (Date.now() - cached.timestamp) < CACHE_TTL_MS;
-            if (isFresh) {
-                return cached.data;
-            }
+        // Return identical in-flight promise if currently loading
+        if (inFlightRequests.has(inFlightKey)) {
+            return inFlightRequests.get(inFlightKey);
         }
 
-        const data = await request(url, {
-            headers: getAuthHeaders()
-        });
+        const fetchPromise = (async () => {
+            try {
+                return await request(url, { headers: getAuthHeaders() });
+            } finally {
+                inFlightRequests.delete(inFlightKey);
+            }
+        })();
 
-        // Store in cache
-        requestCache.set(cacheKey, { data, timestamp: Date.now() });
-        return data;
+        inFlightRequests.set(inFlightKey, fetchPromise);
+        return fetchPromise;
     },
 
     async post(endpoint, body = {}, useAuthParams = true) {

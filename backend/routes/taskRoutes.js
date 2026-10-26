@@ -117,8 +117,12 @@ router.post("/", requireRole(["Principal", "HOD"]), async (req, res) => {
                 organizationId: req.user.organizationId,
                 userId: assignedTo,
                 title: "New Task Assigned 📋",
-                message: `HOD ${req.user.name} assigned you: "${title}". Due: ${taskDeadline} (Priority: ${newTask.priority}).`,
-                type: "deadline"
+                message: `${req.user.name} (${req.user.role}) assigned you: "${title}". Due: ${taskDeadline} (Priority: ${newTask.priority}).`,
+                type: "deadline",
+                category: "Task",
+                senderName: req.user.name,
+                senderRole: req.user.role,
+                targetTab: "tasks"
             });
         } catch (notifErr) {
             console.error("Failed to create task notification:", notifErr);
@@ -213,7 +217,11 @@ router.put("/:id", authenticateUser, async (req, res) => {
                 await notifyDepartmentHOD(req.user.organizationId, req.user.departmentId, {
                     title: "Task Progress Update 📋",
                     message: `${req.user.name} updated task "${task.title}" status to "${task.status}".`,
-                    type: "info"
+                    type: "info",
+                    category: "Task",
+                    senderName: req.user.name,
+                    senderRole: req.user.role,
+                    targetTab: "tasks"
                 });
             } catch (notifErr) {
                 console.error("Failed to notify HOD of task update:", notifErr);

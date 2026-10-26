@@ -29,6 +29,7 @@ import LeaveManagementPanel from "../components/LeaveManagementPanel";
 import NoticesPanel from "../components/NoticesPanel";
 import EventsPanel from "../components/EventsPanel";
 import SubmissionsPanel from "../components/SubmissionsPanel";
+import NotificationCenter from "../components/NotificationCenter";
 import { api } from "../services/api";
 
 function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propToggleTheme }) {
@@ -40,7 +41,8 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [notifications, setNotifications] = useState([]);
-    const [showNotifications, setShowNotifications] = useState(false);
+    const [notificationsLoading, setNotificationsLoading] = useState(false);
+    const [notificationsError, setNotificationsError] = useState("");
     const [branding, setBranding] = useState(null);
     
     // Core data triggers for children components
@@ -112,10 +114,15 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     // Fetch notifications from real backend DB
     const fetchAlerts = async () => {
         try {
+            setNotificationsLoading(true);
+            setNotificationsError("");
             const data = await api.get("/notifications", {}, { noCache: true });
             setNotifications(data.notifications || []);
         } catch (err) {
             console.error("Notifications fetch error:", err);
+            setNotificationsError("Unable to load notifications");
+        } finally {
+            setNotificationsLoading(false);
         }
     };
 
@@ -167,7 +174,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
             clearInterval(fallbackInterval);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [refreshTrigger]);
+    }, [refreshTrigger, currentUser?._id]);
 
     const getTabTitle = () => {
         if (currentTab === "overview") {
@@ -228,15 +235,15 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                     setSelectedFacultyProfile(null);
                     setIsMobileSidebarOpen(false); 
                 }}
-                className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-0 py-2" : "gap-3 px-3 py-2"} text-xs font-semibold rounded-xl transition-all text-left ${
+                className={`w-full flex items-center ${isSidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"} text-xs font-semibold rounded-xl transition-all text-left nav-item-btn ${
                     isActive 
-                        ? "bg-indigo-650 text-white shadow-lg shadow-indigo-650/15" 
+                        ? "active-nav-btn bg-indigo-650 text-white shadow-lg shadow-indigo-650/25 font-bold" 
                         : "text-slate-400 hover:text-slate-200 hover:bg-slate-850"
                 }`}
                 title={label}
             >
-                <span className="w-6 h-6 flex items-center justify-center text-sm shrink-0 leading-none">{icon}</span>
-                {!isSidebarCollapsed && <span className="truncate leading-tight">{label}</span>}
+                <span className="nav-icon w-6 h-6 flex items-center justify-center text-sm shrink-0 leading-none">{icon}</span>
+                {!isSidebarCollapsed && <span className="nav-label truncate leading-tight">{label}</span>}
             </button>
         );
     };
@@ -495,85 +502,17 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             </span>
                         </button>
 
-                        {/* Notification Bell Dropdown */}
-                        <div className="relative">
-                            <button 
-                                onClick={() => setShowNotifications(!showNotifications)}
-                                className="w-9 h-9 flex items-center justify-center hover:bg-slate-850 rounded-xl text-slate-400 hover:text-slate-200 transition-all text-sm relative cursor-pointer"
-                                title="Notifications"
-                            >
-                                <span className="leading-none">🔔</span>
-                                {notifications.filter(n => !n.isRead).length > 0 && (
-                                    <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 bg-rose-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white leading-none shadow ring-2 ring-slate-900 animate-pulse">
-                                        {notifications.filter(n => !n.isRead).length}
-                                    </span>
-                                )}
-                            </button>
-
-                            {showNotifications && (
-                                <div className="absolute right-0 mt-3 w-80 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl z-50 animate-scale-up text-left space-y-3">
-                                    <h4 className="text-xs font-bold text-slate-350 border-b border-slate-800 pb-2 flex items-center justify-between">
-                                        <span>System Notification Alerts</span>
-                                        <div className="flex items-center gap-2">
-                                            {notifications.some(n => !n.isRead) && (
-                                                <button 
-                                                    onClick={async () => {
-                                                        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-                                                        try {
-                                                            await api.put("/notifications/read-all");
-                                                        } catch (e) {
-                                                            console.error("Mark read all failed:", e);
-                                                            fetchAlerts();
-                                                        }
-                                                    }}
-                                                    className="text-[9px] font-semibold text-indigo-400 hover:text-indigo-300"
-                                                >
-                                                    Mark all read
-                                                </button>
-                                            )}
-                                            <span className="text-[9px] font-semibold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                                {notifications.filter(n => !n.isRead).length} New
-                                            </span>
-                                        </div>
-                                    </h4>
-                                    <div className="max-h-64 overflow-y-auto space-y-2">
-                                        {notifications.length === 0 ? (
-                                            <p className="text-slate-500 text-[11px] italic py-4 text-center">No notifications found.</p>
-                                        ) : (
-                                            notifications.map((n) => (
-                                                <div 
-                                                    key={n._id} 
-                                                    onClick={async () => {
-                                                        if (!n.isRead) {
-                                                            setNotifications(prev => prev.map(item => item._id === n._id ? { ...item, isRead: true } : item));
-                                                            try {
-                                                                await api.put(`/notifications/${n._id}/read`);
-                                                            } catch (e) {
-                                                                console.error("Mark read failed:", e);
-                                                                fetchAlerts();
-                                                            }
-                                                        }
-                                                    }}
-                                                    className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-colors ${
-                                                        n.isRead 
-                                                            ? "bg-slate-950/40 border-slate-900/60 opacity-60" 
-                                                            : "bg-slate-950 border-slate-850 hover:bg-slate-900/60"
-                                                    }`}
-                                                >
-                                                    <span className="w-7 h-7 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-center text-xs shrink-0 mt-0.5">
-                                                        {n.type === "warning" ? "⚠️" : n.type === "deadline" ? "⏰" : n.type === "approval" ? "🔔" : "ℹ️"}
-                                                    </span>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-[10px] font-bold text-slate-200 leading-snug">{n.title}</p>
-                                                        <p className="text-[9px] text-slate-400 mt-0.5 leading-relaxed">{n.message}</p>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        {/* Instagram-Style Notification Center */}
+                        <NotificationCenter 
+                            currentUser={currentUser}
+                            notifications={notifications}
+                            setNotifications={setNotifications}
+                            fetchAlerts={fetchAlerts}
+                            loading={notificationsLoading}
+                            error={notificationsError}
+                            setCurrentTab={setCurrentTab}
+                            theme={theme}
+                        />
                     </div>
                 </header>
 

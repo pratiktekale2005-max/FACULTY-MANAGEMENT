@@ -14,29 +14,50 @@ const {
     sendPrincipalDecisionToHOD
 } = require("../services/emailService");
 
-// Helper to populate target entities
+// Helper to populate target entities in parallel bulk batches
 async function populateEntityDetails(approvals) {
-    const result = [];
+    if (!approvals || approvals.length === 0) return [];
+
+    const workshopIds = [];
+    const paperIds = [];
+    const activityIds = [];
+    const leaveIds = [];
+
     for (const app of approvals) {
-        let details = null;
-        try {
-            if (app.entityType === "WORKSHOP") {
-                details = await Workshop.findById(app.entityId);
-            } else if (app.entityType === "PUBLICATION") {
-                details = await Paper.findById(app.entityId);
-            } else if (app.entityType === "ACTIVITY") {
-                details = await Activity.findById(app.entityId);
-            } else if (app.entityType === "LEAVE") {
-                details = await Leave.findById(app.entityId);
-            }
-        } catch (e) {
-            console.error("Failed to populate approval details:", e);
-        }
-        const appObj = app.toObject();
-        appObj.entityDetails = details;
-        result.push(appObj);
+        if (!app.entityId) continue;
+        if (app.entityType === "WORKSHOP") workshopIds.push(app.entityId);
+        else if (app.entityType === "PUBLICATION") paperIds.push(app.entityId);
+        else if (app.entityType === "ACTIVITY") activityIds.push(app.entityId);
+        else if (app.entityType === "LEAVE") leaveIds.push(app.entityId);
     }
-    return result;
+
+    try {
+        const [workshops, papers, activities, leaves] = await Promise.all([
+            workshopIds.length > 0 ? Workshop.find({ _id: { $in: workshopIds } }).lean() : [],
+            paperIds.length > 0 ? Paper.find({ _id: { $in: paperIds } }).lean() : [],
+            activityIds.length > 0 ? Activity.find({ _id: { $in: activityIds } }).lean() : [],
+            leaveIds.length > 0 ? Leave.find({ _id: { $in: leaveIds } }).lean() : []
+        ]);
+
+        const workshopMap = new Map(workshops.map(w => [String(w._id), w]));
+        const paperMap = new Map(papers.map(p => [String(p._id), p]));
+        const activityMap = new Map(activities.map(a => [String(a._id), a]));
+        const leaveMap = new Map(leaves.map(l => [String(l._id), l]));
+
+        return approvals.map(app => {
+            const appObj = app.toObject ? app.toObject() : { ...app };
+            const idStr = String(app.entityId);
+            if (app.entityType === "WORKSHOP") appObj.entityDetails = workshopMap.get(idStr) || null;
+            else if (app.entityType === "PUBLICATION") appObj.entityDetails = paperMap.get(idStr) || null;
+            else if (app.entityType === "ACTIVITY") appObj.entityDetails = activityMap.get(idStr) || null;
+            else if (app.entityType === "LEAVE") appObj.entityDetails = leaveMap.get(idStr) || null;
+            else appObj.entityDetails = null;
+            return appObj;
+        });
+    } catch (e) {
+        console.error("Failed to batch populate approval details:", e);
+        return approvals.map(app => (app.toObject ? app.toObject() : { ...app }));
+    }
 }
 
 // ================= GET APPROVALS =================
@@ -65,9 +86,23 @@ router.get("/", authenticateUser, async (req, res) => {
             query.submittedBy = req.user._id;
         }
 
+        // Optional status filter support
+        if (req.query.status) {
+            const s = req.query.status.toUpperCase();
+            if (s === "PENDING") {
+                query.status = { $in: ["PENDING", "SUBMITTED"] };
+            } else if (s === "APPROVED") {
+                query.status = { $in: ["APPROVED", "HOD_APPROVED"] };
+            } else if (s !== "ALL") {
+                query.status = s;
+            }
+        }
+
         const approvals = await Approval.find(query)
             .populate("submittedBy", "name email department designation")
             .populate("departmentId", "name code")
+            .populate("approvedBy", "name email department designation")
+            .populate("reviewedBy", "name email department designation")
             .sort({ updatedAt: -1 });
 
         const populated = await populateEntityDetails(approvals);
@@ -122,13 +157,13 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
         let nextLevel = approval.currentLevel;
 
         if (req.user.role === "HOD") {
-            if (approval.currentLevel !== "HOD") {
-                return res.status(400).json({ error: "This request is already pending Principal review ❌" });
+            if (approval.currentLevel !== "HOD" && approval.status !== "SUBMITTED" && approval.status !== "PENDING") {
+                return res.status(400).json({ error: "This request is not pending HOD review ❌" });
             }
 
             if (action === "approve") {
-                nextStatus = "HOD_APPROVED";
-                nextLevel = "PRINCIPAL";
+                nextStatus = "APPROVED";
+                nextLevel = "COMPLETED";
             } else if (action === "reject") {
                 nextStatus = "REJECTED";
                 nextLevel = "COMPLETED";
@@ -154,6 +189,16 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
         approval.currentLevel = nextLevel;
         approval.updatedAt = new Date();
 
+        if (action === "approve") {
+            approval.approvedBy = req.user._id;
+            approval.approvedByName = req.user.name;
+            approval.approvedAt = new Date();
+        }
+        approval.reviewedBy = req.user._id;
+        approval.reviewedByName = req.user.name;
+        approval.reviewedAt = new Date();
+        approval.remarks = comment || (action === "approve" ? `Approved by ${req.user.role}` : `${action.toUpperCase()} by ${req.user.role}`);
+
         if (comment) {
             approval.comments.push({
                 sender: req.user._id,
@@ -167,7 +212,7 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
             status: nextStatus,
             actionBy: req.user._id,
             actionByName: req.user.name,
-            comment: comment || "Approved",
+            comment: comment || (action === "approve" ? `Approved by ${req.user.role}` : `${action.toUpperCase()} by ${req.user.role}`),
             date: new Date()
         });
 
@@ -260,7 +305,11 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
                 userId: approval.submittedBy,
                 title: "Submission Status Updated",
                 message: `Your ${approval.entityType.toLowerCase()} submission has been set to "${nextStatus.replace(/_/g, ' ')}" by ${req.user.name} (${req.user.role}).`,
-                type: "approval"
+                type: "approval",
+                category: "Approval",
+                senderName: req.user.name,
+                senderRole: req.user.role,
+                targetTab: "approvals"
             });
 
             // 2. If status is forwarded to Principal (HOD_APPROVED), alert Principal(s) immediately
@@ -268,7 +317,11 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
                 await notifyPrincipals(req.user.organizationId, {
                     title: "Pending Principal Review",
                     message: `${approval.entityType} request from ${approval.submittedByName || "Faculty"} was endorsed by HOD ${req.user.name} and awaits your decision.`,
-                    type: "approval"
+                    type: "approval",
+                    category: "Approval",
+                    senderName: req.user.name,
+                    senderRole: req.user.role,
+                    targetTab: "approvals"
                 });
             }
 
@@ -277,7 +330,11 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
                 await notifyDepartmentHOD(req.user.organizationId, approval.departmentId, {
                     title: "Principal Decision Update",
                     message: `Principal ${req.user.name} decided "${nextStatus.replace(/_/g, ' ')}" on ${approval.entityType.toLowerCase()} submission by ${approval.submittedByName || "Faculty"}.`,
-                    type: "approval"
+                    type: "approval",
+                    category: "Approval",
+                    senderName: req.user.name,
+                    senderRole: req.user.role,
+                    targetTab: "approvals"
                 });
             }
 
@@ -390,7 +447,17 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
             console.error("Failed to dispatch real-time approval notifications:", notifErr);
         }
 
-        res.json({ message: `Successfully transitioned request state to: ${nextStatus} ✅`, approval });
+        const populatedUpdated = await Approval.findById(approval._id)
+            .populate("submittedBy", "name email department designation")
+            .populate("departmentId", "name code")
+            .populate("approvedBy", "name email department designation")
+            .populate("reviewedBy", "name email department designation");
+        const populatedList = await populateEntityDetails([populatedUpdated]);
+
+        res.json({ 
+            message: `Successfully transitioned request state to: ${nextStatus} ✅`, 
+            approval: populatedList[0] || populatedUpdated 
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to transition approval state ❌" });

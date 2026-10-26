@@ -186,7 +186,11 @@ router.post("/", authenticateUser, async (req, res) => {
             await notifyDepartmentHOD(req.user.organizationId, req.user.departmentId, {
                 title: "New Workshop Submitted",
                 message: `${req.user.name} submitted a new workshop for review: "${title}"`,
-                type: "approval"
+                type: "approval",
+                category: "Workshop",
+                senderName: req.user.name,
+                senderRole: req.user.role,
+                targetTab: "events"
             });
         } catch (notifErr) {
             console.error("Failed to create HOD notification:", notifErr);
@@ -665,7 +669,11 @@ router.put("/:id/status", requireRole(["HOD"]), async (req, res) => {
                 userId: workshop.submittedBy,
                 title: status === "verified" ? "Workshop Approved ✅" : "Workshop Rejected ❌",
                 message: `Your workshop "${workshop.title}" was ${status === "verified" ? "approved" : "rejected"} by HOD ${req.user.name}.`,
-                type: "approval"
+                type: status === "verified" ? "approval" : "warning",
+                category: "Workshop",
+                senderName: req.user.name,
+                senderRole: req.user.role,
+                targetTab: "events"
             });
         } catch (notifErr) {
             console.error("Failed to notify faculty of workshop decision:", notifErr);

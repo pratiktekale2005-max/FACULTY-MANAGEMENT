@@ -51,53 +51,43 @@ async function calculateFacultyScore(facultyId) {
         teachingScoreRaw = totalPct / subjects.length;
     }
 
-    // 3. Compute Research Score (Publications count - only approved)
-    const approvedPaperIds = await Approval.find({
-        organizationId: orgId,
-        entityType: "PUBLICATION",
-        submittedBy: facultyId,
-        status: "APPROVED"
-    }).distinct("entityId");
+    // Parallelize research, feedback, workshops, tasks, activities queries
+    const [
+        approvedPaperIds,
+        feedbacks,
+        approvedWorkshopIds,
+        tasks,
+        approvedActivityIds
+    ] = await Promise.all([
+        Approval.find({ organizationId: orgId, entityType: "PUBLICATION", submittedBy: facultyId, status: "APPROVED" }).distinct("entityId"),
+        Feedback.find({ userId: facultyId }).lean(),
+        Approval.find({ organizationId: orgId, entityType: "WORKSHOP", submittedBy: facultyId, status: "APPROVED" }).distinct("entityId"),
+        Task.find({ assignedTo: facultyId }).lean(),
+        Approval.find({ organizationId: orgId, entityType: "ACTIVITY", submittedBy: facultyId, status: "APPROVED" }).distinct("entityId")
+    ]);
 
-    const approvedPapersCount = await Paper.countDocuments({ _id: { $in: approvedPaperIds } });
+    const [approvedPapersCount, approvedWorkshopsCount, approvedActivitiesCount] = await Promise.all([
+        Paper.countDocuments({ _id: { $in: approvedPaperIds } }),
+        Workshop.countDocuments({ _id: { $in: approvedWorkshopIds } }),
+        Activity.countDocuments({ _id: { $in: approvedActivityIds } })
+    ]);
+
     const researchScoreRaw = Math.min(approvedPapersCount * 25, 100);
 
-    // 4. Compute Student Feedback Score (Survey rating averages)
-    const feedbacks = await Feedback.find({ userId: facultyId });
     let feedbackScoreRaw = 80; // Default equivalent to 4/5 stars if no feedback
     if (feedbacks.length > 0) {
         const sum = feedbacks.reduce((acc, curr) => acc + curr.rating, 0);
         feedbackScoreRaw = (sum / feedbacks.length) * 20; // Scale 1-5 rating to 0-100
     }
 
-    // 5. Compute Professional Development Score (Workshops organized/attended - only approved)
-    const approvedWorkshopIds = await Approval.find({
-        organizationId: orgId,
-        entityType: "WORKSHOP",
-        submittedBy: facultyId,
-        status: "APPROVED"
-    }).distinct("entityId");
-
-    const approvedWorkshopsCount = await Workshop.countDocuments({ _id: { $in: approvedWorkshopIds } });
     const devScoreRaw = Math.min(approvedWorkshopsCount * 50, 100);
 
-    // 6. Compute Administrative Work (Tasks progress)
-    const tasks = await Task.find({ assignedTo: facultyId });
     let adminScoreRaw = 100; // Default if no tasks assigned
     if (tasks.length > 0) {
         const completed = tasks.filter(t => t.status === "completed").length;
         adminScoreRaw = (completed / tasks.length) * 100;
     }
 
-    // 7. Compute Other Activities Score (Other portfolio activities - only approved)
-    const approvedActivityIds = await Approval.find({
-        organizationId: orgId,
-        entityType: "ACTIVITY",
-        submittedBy: facultyId,
-        status: "APPROVED"
-    }).distinct("entityId");
-
-    const approvedActivitiesCount = await Activity.countDocuments({ _id: { $in: approvedActivityIds } });
     const otherScoreRaw = Math.min(approvedActivitiesCount * 33.4, 100);
 
     // 8. Compile weighted contributions
@@ -205,18 +195,17 @@ router.get("/department/:departmentId", requireRole(["Principal", "HOD"]), async
             return res.json({ averageScore: 0, breakdowns: [] });
         }
 
+        const cards = await Promise.all(faculties.map(fac => calculateFacultyScore(fac._id)));
         let sumOverall = 0;
-        const list = [];
-        for (const fac of faculties) {
-            const card = await calculateFacultyScore(fac._id);
+        const list = cards.map((card, idx) => {
             sumOverall += card.overallScore;
-            list.push({
-                facultyId: fac._id,
-                name: fac.name,
+            return {
+                facultyId: faculties[idx]._id,
+                name: faculties[idx].name,
                 overallScore: card.overallScore,
                 breakdown: card.breakdown
-            });
-        }
+            };
+        });
 
         res.json({
             averageScore: Math.round(sumOverall / faculties.length),

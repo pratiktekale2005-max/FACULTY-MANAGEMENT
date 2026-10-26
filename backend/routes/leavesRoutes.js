@@ -337,7 +337,11 @@ router.put("/:id/review", authenticateUser, async (req, res) => {
             userId: leave.userId,
             title: "Leave Status Updated",
             message: `Your ${leave.leaveType} application status has been updated to "${leave.status.replace(/_/g, ' ')}" by ${req.user.name} (${req.user.role}).`,
-            type: "approval"
+            type: "approval",
+            category: "Leave",
+            senderName: req.user.name,
+            senderRole: req.user.role,
+            targetTab: "leave"
         }).catch(e => console.error("Async leave notification error:", e));
 
         // Dispatch decision emails (Requirements 4, 5, 6)

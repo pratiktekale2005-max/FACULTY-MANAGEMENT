@@ -226,12 +226,14 @@ function OrganizationSettings({ currentUser }) {
         }
     };
 
-    if (loading) {
-        return <div className="text-center italic py-8 text-slate-550">Loading organization configuration...</div>;
-    }
-
     return (
         <form onSubmit={handleSave} className="space-y-6 text-xs animate-fade-in pb-12">
+            {loading && (
+                <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 p-3 rounded-xl animate-pulse flex items-center gap-2">
+                    <span className="animate-spin">⏳</span>
+                    <span>Loading organization configuration...</span>
+                </div>
+            )}
             <div className="bg-[#101622] border border-slate-800 p-5 rounded-2xl flex items-center justify-between shadow-lg">
                 <div>
                     <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Institution Profile Settings</h2>

@@ -28,14 +28,6 @@ function FacultyPerformance({ currentUser }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser]);
 
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center py-12">
-                <p className="text-slate-400 text-xs italic">Loading performance dashboard...</p>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6 text-xs animate-fade-in">
             {/* Header */}
@@ -69,7 +61,18 @@ function FacultyPerformance({ currentUser }) {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-850">
-                                {faculties.length === 0 ? (
+                                {loading ? (
+                                    [1, 2, 3, 4].map(i => (
+                                        <tr key={i} className="animate-pulse">
+                                            <td className="py-3.5 px-4"><div className="h-4 bg-slate-800 rounded w-32"></div></td>
+                                            <td className="py-3.5 px-4 text-center"><div className="h-6 bg-slate-800 rounded-lg w-16 mx-auto"></div></td>
+                                            <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-10 mx-auto"></div></td>
+                                            <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-10 mx-auto"></div></td>
+                                            <td className="py-3.5 px-4 text-center"><div className="h-4 bg-slate-800 rounded w-10 mx-auto"></div></td>
+                                            <td className="py-3.5 px-4 text-center"><div className="h-6 bg-slate-800 rounded-lg w-20 mx-auto"></div></td>
+                                        </tr>
+                                    ))
+                                ) : faculties.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="py-6 text-center text-slate-500 italic">No faculty members assigned to your department.</td>
                                     </tr>

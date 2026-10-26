@@ -4,7 +4,7 @@ import { api } from "../services/api";
 function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName, currentUser, onRefresh }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [profile, setProfile] = useState(null);
+    const [profile, setProfile] = useState(facultyData || null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [activities, setActivities] = useState({
@@ -114,7 +114,7 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
         }
     };
 
-    if (loading) {
+    if (loading && !profile) {
         return (
             <div className="bg-[#101622] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 space-y-3 animate-fade-in">
                 <div className="text-3xl animate-bounce">👤</div>

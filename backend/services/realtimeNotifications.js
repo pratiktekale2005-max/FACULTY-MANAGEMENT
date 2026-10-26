@@ -68,7 +68,18 @@ function sendRealtimeNotification(userId, notification) {
 /**
  * Save notification in database AND push immediately via real-time stream
  */
-async function createAndDispatchNotification({ userId, organizationId, title, message, type = "info" }) {
+async function createAndDispatchNotification({
+    userId,
+    organizationId,
+    title,
+    message,
+    type = "info",
+    category = "General",
+    senderName = "",
+    senderRole = "",
+    targetTab = "",
+    entityId = null
+}) {
     try {
         if (!userId || !organizationId || !title || !message) {
             console.warn("⚠️ createAndDispatchNotification missing required parameters");
@@ -80,7 +91,12 @@ async function createAndDispatchNotification({ userId, organizationId, title, me
             organizationId,
             title,
             message,
-            type: ["info", "warning", "deadline", "approval"].includes(type) ? type : "info",
+            type: type || "info",
+            category: category || "General",
+            senderName: senderName || "",
+            senderRole: senderRole || "",
+            targetTab: targetTab || "",
+            entityId: entityId || null,
             isRead: false,
             createdAt: new Date()
         });
@@ -99,9 +115,37 @@ async function createAndDispatchNotification({ userId, organizationId, title, me
 
 /**
  * Find HOD of a department and send them a notification in real-time
+ * Supports both:
+ * notifyDepartmentHOD(orgId, deptId, { title, message, ... })
+ * notifyDepartmentHOD({ organizationId, departmentId, title, message, ... })
  */
-async function notifyDepartmentHOD(organizationId, departmentId, { title, message, type = "approval" }) {
+async function notifyDepartmentHOD(arg1, arg2, arg3) {
     try {
+        let organizationId;
+        let departmentId;
+        let payload;
+
+        if (arg1 && typeof arg1 === "object") {
+            organizationId = arg1.organizationId;
+            departmentId = arg1.departmentId;
+            payload = arg1;
+        } else {
+            organizationId = arg1;
+            departmentId = arg2;
+            payload = arg3 || {};
+        }
+
+        const {
+            title,
+            message,
+            type = "approval",
+            category = "Approval",
+            senderName = "",
+            senderRole = "",
+            targetTab = "approvals",
+            entityId = null
+        } = payload;
+
         let hodUserId = null;
 
         if (departmentId) {
@@ -123,7 +167,7 @@ async function notifyDepartmentHOD(organizationId, departmentId, { title, messag
         }
 
         // Fallback: If no departmentId given or not found, find any HOD in the organization
-        if (!hodUserId) {
+        if (!hodUserId && organizationId) {
             const fallbackHod = await User.findOne({
                 role: "HOD",
                 organizationId
@@ -139,7 +183,12 @@ async function notifyDepartmentHOD(organizationId, departmentId, { title, messag
                 organizationId,
                 title,
                 message,
-                type
+                type,
+                category,
+                senderName,
+                senderRole,
+                targetTab,
+                entityId
             });
         } else {
             console.warn(`⚠️ No HOD found for organization ${organizationId} and department ${departmentId}`);
@@ -152,9 +201,39 @@ async function notifyDepartmentHOD(organizationId, departmentId, { title, messag
 
 /**
  * Notify all Principals in the organization in real-time
+ * Supports both:
+ * notifyPrincipals(orgId, { title, message, ... })
+ * notifyPrincipals({ organizationId, title, message, ... })
  */
-async function notifyPrincipals(organizationId, { title, message, type = "approval" }) {
+async function notifyPrincipals(arg1, arg2) {
     try {
+        let organizationId;
+        let payload;
+
+        if (arg1 && typeof arg1 === "object") {
+            organizationId = arg1.organizationId;
+            payload = arg1;
+        } else {
+            organizationId = arg1;
+            payload = arg2 || {};
+        }
+
+        const {
+            title,
+            message,
+            type = "approval",
+            category = "Approval",
+            senderName = "",
+            senderRole = "",
+            targetTab = "approvals",
+            entityId = null
+        } = payload;
+
+        if (!organizationId) {
+            console.warn("⚠️ notifyPrincipals called without organizationId");
+            return [];
+        }
+
         const principals = await User.find({
             role: "Principal",
             organizationId
@@ -166,7 +245,12 @@ async function notifyPrincipals(organizationId, { title, message, type = "approv
                 organizationId,
                 title,
                 message,
-                type
+                type,
+                category,
+                senderName,
+                senderRole,
+                targetTab,
+                entityId
             })
         );
 

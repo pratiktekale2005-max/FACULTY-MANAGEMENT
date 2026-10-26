@@ -28,17 +28,20 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
     useEffect(() => {
         const loadAnalytics = async () => {
             try {
-                // 1. Fetch subjects
-                const subData = await api.get("/subjects");
+                // Fetch subjects, workshops, papers, departments, and users in parallel
+                const [subData, workData, paperData, deptRes, userRes] = await Promise.all([
+                    api.get("/subjects").catch(() => ({ subjects: [] })),
+                    api.get("/workshops").catch(() => ({ workshops: [] })),
+                    api.get("/papers").catch(() => ({ papers: [] })),
+                    api.get("/departments").catch(() => ({ departments: [] })),
+                    api.get("/users").catch(() => ({ users: [] }))
+                ]);
+
                 const subjects = subData.subjects || [];
-
-                // 2. Fetch workshops
-                const workData = await api.get("/workshops");
                 const workshops = workData.workshops || [];
-
-                // 3. Fetch papers
-                const paperData = await api.get("/papers");
                 const papers = paperData.papers || [];
+                const depts = deptRes.departments || [];
+                const users = userRes.users || [];
 
                 // 4. Fetch faculties & departments (Principal / General)
                 let totalFaculty = 0;
@@ -55,13 +58,6 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                 let adminCount = 0;
 
                 try {
-                    const [deptRes, userRes] = await Promise.all([
-                        api.get("/departments").catch(() => ({ departments: [] })),
-                        api.get("/users").catch(() => ({ users: [] }))
-                    ]);
-                    const depts = deptRes.departments || [];
-                    const users = userRes.users || [];
-                    
                     const academicDepts = depts.filter(d => d.code !== "ADM" && d.name?.toLowerCase() !== "administration");
                     departmentCount = academicDepts.length;
                     departmentList = academicDepts.map(d => d.code || d.name).join(" • ");

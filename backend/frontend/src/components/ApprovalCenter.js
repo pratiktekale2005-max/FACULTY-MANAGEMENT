@@ -59,17 +59,26 @@ function ApprovalCenter({ currentUser }) {
 
         try {
             setSubmittingAction(true);
-            await api.post(`/approvals/${id}/transition`, { 
+            const res = await api.post(`/approvals/${id}/transition`, { 
                 action, 
                 comment: remarks.trim() 
             });
 
             const actionWord = action === "approve" ? "approved" : action === "reject" ? "rejected" : "returned";
-            setSuccessMsg(`Request successfully ${actionWord} and notification email dispatched! ✅`);
+            setSuccessMsg(`Request successfully ${actionWord} and notification dispatched! ✅`);
             setTimeout(() => setSuccessMsg(""), 5000);
 
             setRemarks("");
-            await loadApprovals(false);
+
+            // Immediate local state update for zero-delay UI reactivity
+            const updatedApproval = res.approval;
+            if (updatedApproval) {
+                setApprovals(prev => prev.map(item => item._id === id ? { ...item, ...updatedApproval } : item));
+                setSelectedApp(prev => prev && prev._id === id ? { ...prev, ...updatedApproval } : prev);
+            }
+
+            // Silent background refresh to re-sync
+            loadApprovals(true);
         } catch (err) {
             alert(err.response?.data?.error || err.message || "Failed to update approval ❌");
         } finally {
@@ -81,6 +90,7 @@ function ApprovalCenter({ currentUser }) {
         switch (status) {
             case "APPROVED": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
             case "HOD_APPROVED": return "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20";
+            case "PENDING":
             case "SUBMITTED": return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
             case "REJECTED": return "bg-rose-500/10 text-rose-400 border border-rose-500/20";
             case "RETURNED": return "bg-sky-500/10 text-sky-400 border border-sky-500/20";
@@ -100,11 +110,11 @@ function ApprovalCenter({ currentUser }) {
         // 1. Status Filter
         let matchesStatus = true;
         if (statusFilter === "pending") {
-            // For Principal: pending means either HOD_APPROVED or SUBMITTED if Principal review is needed
-            // For HOD: pending means SUBMITTED
-            matchesStatus = a.status === "SUBMITTED" || a.status === "HOD_APPROVED";
+            // Pending queue shows requests awaiting review
+            matchesStatus = a.status === "PENDING" || a.status === "SUBMITTED" || (currentUser?.role === "Principal" && a.status === "HOD_APPROVED");
         } else if (statusFilter === "approved") {
-            matchesStatus = a.status === "APPROVED";
+            // Approved tab shows requests approved by HOD or Principal
+            matchesStatus = a.status === "APPROVED" || a.status === "HOD_APPROVED";
         } else if (statusFilter === "rejected") {
             matchesStatus = a.status === "REJECTED";
         } else if (statusFilter === "returned") {
@@ -131,17 +141,6 @@ function ApprovalCenter({ currentUser }) {
 
         return matchesStatus && matchesType && matchesDept && matchesSearch;
     });
-
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center py-16">
-                <div className="flex items-center gap-3 text-slate-400 text-xs italic">
-                    <span className="animate-spin text-base">⏳</span>
-                    <span>Loading approvals queue...</span>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6 text-xs animate-fade-in pb-12">
@@ -272,7 +271,19 @@ function ApprovalCenter({ currentUser }) {
                     </h3>
                     
                     <div className="space-y-2.5">
-                        {filteredList.length === 0 ? (
+                        {loading ? (
+                            <div className="space-y-3">
+                                {[1, 2, 3, 4].map(i => (
+                                    <div key={i} className="bg-slate-900/60 border border-slate-800 p-4 rounded-xl animate-pulse flex items-center justify-between">
+                                        <div className="space-y-2 flex-1">
+                                            <div className="h-4 bg-slate-800 rounded w-2/5"></div>
+                                            <div className="h-3 bg-slate-800/60 rounded w-3/5"></div>
+                                        </div>
+                                        <div className="h-7 bg-slate-800/80 rounded-lg w-20"></div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : filteredList.length === 0 ? (
                             <div className="py-12 text-center text-slate-500 italic space-y-1">
                                 <p className="text-2xl">📭</p>
                                 <p>No approval requests found matching your filter criteria.</p>
@@ -283,8 +294,13 @@ function ApprovalCenter({ currentUser }) {
                                 const deptName = a.departmentName || a.departmentId?.name || a.submittedBy?.department || "General";
                                 const isSelected = selectedApp?._id === a._id;
                                 
-                                // Check HOD Decision info
-                                const hodHistory = a.history?.find(h => h.status === "HOD_APPROVED" || h.status === "REJECTED");
+                                // Check approval and rejection history details
+                                const approvalHistoryItem = a.history && a.history.slice().reverse().find(h => h.status === "APPROVED" || h.status === "HOD_APPROVED");
+                                const rejectionHistoryItem = a.history && a.history.slice().reverse().find(h => h.status === "REJECTED");
+                                const isApproved = a.status === "APPROVED" || a.status === "HOD_APPROVED";
+                                const isPending = a.status === "PENDING" || a.status === "SUBMITTED";
+                                const approvedByName = a.approvedByName || a.approvedBy?.name || approvalHistoryItem?.actionByName;
+                                const approvedAt = a.approvedAt || approvalHistoryItem?.date;
 
                                 return (
                                     <div 
@@ -293,7 +309,7 @@ function ApprovalCenter({ currentUser }) {
                                             setSelectedApp(a);
                                             setRemarks("");
                                         }}
-                                        className={`p-4 bg-slate-950/40 hover:bg-slate-900/60 border rounded-xl flex items-center justify-between gap-4 cursor-pointer transition-all ${
+                                        className={`p-4 bg-slate-950/40 hover:bg-slate-900/60 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all ${
                                             isSelected ? "border-indigo-500 shadow-md shadow-indigo-500/10 bg-slate-900/60" : "border-slate-800/80"
                                         }`}
                                     >
@@ -321,16 +337,25 @@ function ApprovalCenter({ currentUser }) {
                                                 <span>Submitted: {new Date(a.createdAt).toLocaleDateString()}</span>
                                             </p>
 
-                                            {/* HOD Decision summary if available */}
-                                            {hodHistory && (
-                                                <p className="text-[10px] text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded inline-block border border-amber-500/20">
-                                                    HOD {hodHistory.status === "HOD_APPROVED" ? "Endorsed" : "Decision"}: "{hodHistory.comment || hodHistory.status}" by {hodHistory.actionByName}
+                                            {/* Approved view details: Approved Date & Approved By */}
+                                            {isApproved && (
+                                                <div className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg inline-flex items-center gap-2 border border-emerald-500/20 flex-wrap">
+                                                    <span>✅ <strong>Approved by:</strong> {approvedByName || "HOD"}</span>
+                                                    {approvedAt && <span>&bull; <strong>Approved:</strong> {new Date(approvedAt).toLocaleDateString()}</span>}
+                                                    {a.remarks && <span className="italic text-emerald-300">"{a.remarks}"</span>}
+                                                </div>
+                                            )}
+
+                                            {/* Rejection summary if rejected */}
+                                            {rejectionHistoryItem && a.status === "REJECTED" && (
+                                                <p className="text-[10px] text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-lg inline-block border border-rose-500/20">
+                                                    ✕ <strong>Rejected by:</strong> {rejectionHistoryItem.actionByName} {rejectionHistoryItem.comment ? `("${rejectionHistoryItem.comment}")` : ""}
                                                 </p>
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-3 text-right shrink-0">
-                                            <div>
+                                        <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
+                                            <div className="text-left sm:text-right">
                                                 <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[9px] font-bold ${getStatusBadge(a.status)}`}>
                                                     {a.status}
                                                 </span>
@@ -340,6 +365,23 @@ function ApprovalCenter({ currentUser }) {
                                                     </span>
                                                 )}
                                             </div>
+
+                                            {/* Quick Action button for pending approvals */}
+                                            {isPending && (currentUser.role === "HOD" || currentUser.role === "Principal") && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedApp(a);
+                                                        handleTransition(a._id, "approve");
+                                                    }}
+                                                    disabled={submittingAction}
+                                                    title="Quick Approve Request"
+                                                    className="px-2.5 py-1 bg-emerald-650 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-lg text-[10px] transition shadow flex items-center gap-1 shrink-0"
+                                                >
+                                                    {submittingAction && selectedApp?._id === a._id ? "⏳" : "✅ Approve"}
+                                                </button>
+                                            )}
+
                                             <span className={`text-sm ${isSelected ? "text-indigo-400" : "text-slate-600"}`}>➔</span>
                                         </div>
                                     </div>
@@ -479,10 +521,37 @@ function ApprovalCenter({ currentUser }) {
                                 const isPendingAtMyLevel = selectedApp.currentLevel === currentUser.role;
 
                                 if (isFinalized) {
+                                    const isApprovedState = selectedApp.status === "APPROVED" || selectedApp.status === "HOD_APPROVED";
+                                    const approverName = selectedApp.approvedByName || selectedApp.approvedBy?.name || selectedApp.history?.slice().reverse().find(h => h.status === selectedApp.status)?.actionByName || (isApprovedState ? "HOD" : "Reviewer");
+                                    const decisionDate = selectedApp.approvedAt || selectedApp.history?.slice().reverse().find(h => h.status === selectedApp.status)?.date || selectedApp.updatedAt;
+                                    const finalRemarks = selectedApp.remarks || selectedApp.history?.slice().reverse().find(h => h.status === selectedApp.status)?.comment;
+
                                     return (
-                                        <div className="p-3 bg-slate-900/40 border border-slate-800 rounded-xl text-center text-slate-400">
-                                            <p className="font-bold text-slate-300">✅ Request Finalized</p>
-                                            <p className="text-[10px] mt-0.5">This application has reached a final decision ({selectedApp.status}) and cannot be modified again.</p>
+                                        <div className={`p-4 rounded-xl border text-left space-y-2.5 ${
+                                            isApprovedState 
+                                                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                                                : "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                                        }`}>
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                                    {isApprovedState ? "✅ Request Approved" : "✕ Request Rejected"}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${getStatusBadge(selectedApp.status)}`}>
+                                                    {selectedApp.status}
+                                                </span>
+                                            </div>
+                                            <div className="text-[11px] space-y-1 text-slate-300">
+                                                <p><strong>{isApprovedState ? "Approved by:" : "Reviewed by:"}</strong> {approverName}</p>
+                                                <p><strong>Decision Date:</strong> {new Date(decisionDate).toLocaleDateString()} {new Date(decisionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                {finalRemarks && (
+                                                    <p className="bg-slate-950/40 p-2 rounded-lg border border-slate-800 text-slate-350 italic">
+                                                        "{finalRemarks}"
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 italic">
+                                                This application has reached a final decision and cannot be modified again.
+                                            </p>
                                         </div>
                                     );
                                 }
@@ -515,14 +584,14 @@ function ApprovalCenter({ currentUser }) {
                                                 disabled={submittingAction}
                                                 className="flex-1 py-2 bg-emerald-650 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 text-center"
                                             >
-                                                ✅ Approve
+                                                {submittingAction ? "⏳ Processing..." : "✅ Approve"}
                                             </button>
                                             <button
                                                 onClick={() => handleTransition(selectedApp._id, "reject")}
                                                 disabled={submittingAction}
                                                 className="flex-1 py-2 bg-rose-650 hover:bg-rose-600 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-md shadow-rose-600/20 text-center"
                                             >
-                                                ✕ Reject
+                                                {submittingAction ? "⏳ Processing..." : "✕ Reject"}
                                             </button>
                                         </div>
                                     </div>

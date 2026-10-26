@@ -38,18 +38,54 @@ function TasksPanel({ currentUser }) {
             else setIsRefreshing(true);
             setError("");
 
-            // 1. Fetch Tasks
-            const taskData = await api.get("/tasks");
-            setTasks(taskData.tasks || []);
+            // Parallel fetch of tasks and faculties (if required for role)
+            const needFaculties = currentUser.role === "Principal" || currentUser.role === "HOD";
+            const [taskData, facData] = await Promise.all([
+                api.get("/tasks"),
+                needFaculties ? api.get("/faculty") : Promise.resolve(null)
+            ]);
 
-            // 2. Fetch faculties if HOD or Principal to assign tasks
-            if (currentUser.role === "Principal" || currentUser.role === "HOD") {
-                const facData = await api.get("/faculty");
+            setTasks(taskData?.tasks || []);
+
+            if (needFaculties && facData) {
                 const allFac = facData.faculties || [];
-                // Filter by department for HOD if department is set
-                const filtered = currentUser.role === "HOD" && currentUser.department
-                    ? allFac.filter(f => !f.department || f.department.toLowerCase() === currentUser.department.toLowerCase())
-                    : allFac;
+                // The backend /api/faculty already scopes by departmentId for HODs and returns all for Principal.
+                // Exclude Principal accounts from task assignment targets.
+                let filtered = allFac.filter(f => f.role !== "Principal");
+
+                // If HOD, verify department match with flexible matching (ID, code, or name)
+                if (currentUser.role === "HOD" && (currentUser.departmentId || currentUser.department)) {
+                    const hodDeptId = String(currentUser.departmentId?._id || currentUser.departmentId || "");
+                    const hodDeptStr = (currentUser.department || "").toLowerCase().trim();
+
+                    const deptFiltered = filtered.filter(f => {
+                        const fDeptId = String(f.departmentId?._id || f.departmentId || "");
+                        if (hodDeptId && fDeptId && hodDeptId === fDeptId) return true;
+
+                        const fDeptName = (f.department || f.departmentId?.name || "").toLowerCase().trim();
+                        const fDeptCode = (f.departmentId?.code || "").toLowerCase().trim();
+
+                        if (hodDeptStr && (
+                            fDeptName === hodDeptStr || 
+                            fDeptCode === hodDeptStr || 
+                            fDeptName.includes(hodDeptStr) || 
+                            hodDeptStr.includes(fDeptName)
+                        )) return true;
+
+                        return false;
+                    });
+
+                    // Only apply deptFiltered if it matched faculties, otherwise keep all returned members
+                    if (deptFiltered.length > 0) {
+                        filtered = deptFiltered;
+                    }
+                }
+
+                // Safety fallback: if filter eliminated everyone, keep all non-Principal faculties
+                if (filtered.length === 0 && allFac.length > 0) {
+                    filtered = allFac.filter(f => f.role !== "Principal");
+                }
+
                 setFaculties(filtered);
 
                 setForm(prev => {
@@ -68,12 +104,12 @@ function TasksPanel({ currentUser }) {
         }
     }, [currentUser]);
 
-    // Initial load + Real-time fallback polling every 5 seconds
+    // Initial load + Real-time fallback polling
     useEffect(() => {
         loadTasksAndFaculties(false);
         const interval = setInterval(() => {
             loadTasksAndFaculties(true);
-        }, 5000);
+        }, 15000);
         return () => clearInterval(interval);
     }, [loadTasksAndFaculties]);
 
@@ -209,17 +245,6 @@ function TasksPanel({ currentUser }) {
         return matchesSearch && matchesStatus && matchesPriority;
     });
 
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center py-16">
-                <div className="flex items-center gap-3 text-slate-400 text-xs italic">
-                    <span className="animate-spin text-base">⏳</span>
-                    <span>Loading real-time tasks queue...</span>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6 text-xs animate-fade-in pb-12">
             {/* Header section */}
@@ -324,22 +349,39 @@ function TasksPanel({ currentUser }) {
 
                         {/* Select Faculty Member */}
                         <div className="flex flex-col gap-1.5 sm:col-span-2">
-                            <label className="text-[9px] font-bold text-slate-400 uppercase">
-                                Select Faculty Member <span className="text-rose-400">*</span>
+                            <label className="text-[9px] font-bold text-slate-400 uppercase flex items-center justify-between">
+                                <span>Select Faculty Member <span className="text-rose-400">*</span></span>
+                                <span className="text-[10px] text-indigo-400 font-semibold">
+                                    {faculties.length} {faculties.length === 1 ? "member" : "members"} available
+                                </span>
                             </label>
                             <select
-                                className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                className="w-full text-xs text-slate-100 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500 font-medium"
                                 value={form.assignedTo}
                                 onChange={(e) => setForm(prev => ({ ...prev, assignedTo: e.target.value }))}
                                 required
                             >
-                                <option value="">-- Choose Faculty Member --</option>
-                                {faculties.map(f => (
-                                    <option key={f._id} value={f._id}>
-                                        {f.name} ({f.designation || "Faculty"} - {f.department || "General"}) - {f.email}
-                                    </option>
-                                ))}
+                                <option value="" className="bg-slate-900 text-slate-400">-- Choose Faculty Member --</option>
+                                {faculties.map(f => {
+                                    const facName = f.fullName || f.name || "Faculty Member";
+                                    const facDept = f.department || f.departmentId?.name || f.departmentId?.code || "Department";
+                                    const facDesig = f.designation || f.role || "Faculty";
+                                    return (
+                                        <option 
+                                            key={f._id} 
+                                            value={f._id} 
+                                            className="bg-slate-900 text-slate-100 py-1.5 font-medium"
+                                        >
+                                            👤 {facName} ({facDesig} • {facDept}) — {f.email}
+                                        </option>
+                                    );
+                                })}
                             </select>
+                            {faculties.length === 0 && (
+                                <p className="text-[10px] text-amber-400 italic mt-0.5">
+                                    ⚠️ No faculty members found for this department yet. Please verify faculty accounts in the Directory.
+                                </p>
+                            )}
                         </div>
 
                         {/* Priority */}
@@ -522,7 +564,19 @@ function TasksPanel({ currentUser }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-850">
-                            {filteredTasks.length === 0 ? (
+                            {loading ? (
+                                [1, 2, 3, 4].map(i => (
+                                    <tr key={i} className="animate-pulse">
+                                        <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-44 mb-1"></div><div className="h-3 bg-slate-800/60 rounded w-32"></div></td>
+                                        <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-20"></div></td>
+                                        <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-28"></div></td>
+                                        <td className="py-4 px-4 text-center"><div className="h-5 bg-slate-800 rounded-full w-16 mx-auto"></div></td>
+                                        <td className="py-4 px-4"><div className="h-4 bg-slate-800 rounded w-20"></div></td>
+                                        <td className="py-4 px-4 text-center"><div className="h-5 bg-slate-800 rounded-full w-20 mx-auto"></div></td>
+                                        <td className="py-4 px-4 text-center"><div className="h-7 bg-slate-800 rounded-lg w-16 mx-auto"></div></td>
+                                    </tr>
+                                ))
+                            ) : filteredTasks.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="py-12 text-center text-slate-500 italic">
                                         No tasks found matching your filter criteria.
@@ -556,8 +610,8 @@ function TasksPanel({ currentUser }) {
                                             </td>
                                             <td className="py-3.5 px-4 text-slate-350">
                                                 {currentUser.role === "Faculty" 
-                                                    ? (t.assignedByName || t.assignedBy?.name || "HOD")
-                                                    : (t.assignedTo?.name || "Unassigned")}
+                                                    ? (t.assignedByName || t.assignedBy?.name || t.assignedBy?.fullName || "HOD")
+                                                    : (t.assignedTo?.name || t.assignedTo?.fullName || "Unassigned")}
                                             </td>
                                             <td className="py-3.5 px-4 text-center">
                                                 <span className={`inline-block px-2.5 py-0.5 border rounded-lg text-[9px] font-bold capitalize ${getPriorityColor(t.priority)}`}>
@@ -664,7 +718,7 @@ function TasksPanel({ currentUser }) {
                             </div>
                             <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
                                 <span className="text-[9px] font-bold text-slate-500 uppercase block">Assigned To</span>
-                                <span className="text-slate-200 font-semibold">{selectedTask.assignedTo?.name || "Unassigned"}</span>
+                                <span className="text-slate-200 font-semibold">{selectedTask.assignedTo?.name || selectedTask.assignedTo?.fullName || "Unassigned"}</span>
                                 {selectedTask.assignedTo?.email && (
                                     <span className="text-[10px] text-slate-400 block">{selectedTask.assignedTo.email}</span>
                                 )}

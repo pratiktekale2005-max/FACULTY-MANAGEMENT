@@ -13,7 +13,7 @@ const approvalSchema = new mongoose.Schema({
     departmentName: { type: String, default: "" },
     status: { 
         type: String, 
-        enum: ["DRAFT", "SUBMITTED", "HOD_APPROVED", "APPROVED", "REJECTED", "RETURNED"], 
+        enum: ["DRAFT", "PENDING", "SUBMITTED", "HOD_APPROVED", "APPROVED", "REJECTED", "RETURNED"], 
         default: "SUBMITTED" 
     },
     currentLevel: { 
@@ -21,6 +21,13 @@ const approvalSchema = new mongoose.Schema({
         enum: ["HOD", "PRINCIPAL", "COMPLETED"], 
         default: "HOD" 
     },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    approvedByName: { type: String, default: "" },
+    approvedAt: { type: Date, default: null },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    reviewedByName: { type: String, default: "" },
+    reviewedAt: { type: Date, default: null },
+    remarks: { type: String, default: "" },
     comments: [{
         sender: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         senderName: { type: String, required: true },

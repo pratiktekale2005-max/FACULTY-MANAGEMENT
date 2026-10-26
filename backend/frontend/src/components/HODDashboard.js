@@ -21,30 +21,31 @@ function HODDashboard({ currentUser, onSelectFaculty, setCurrentTab }) {
             setLoading(true);
             setError("");
             
-            // 1. Load department performance and faculty list
-            const performanceData = await api.get(`/performance/department/${currentUser.departmentId}`);
+            // Parallelize all department metrics requests concurrently
+            const [
+                performanceData,
+                approvalData,
+                taskData,
+                workshopData,
+                paperData,
+                activityData,
+                kpiData
+            ] = await Promise.all([
+                api.get(`/performance/department/${currentUser.departmentId}`).catch(() => ({ faculties: [], averageScore: 0 })),
+                api.get("/approvals").catch(() => ({ approvals: [] })),
+                api.get("/tasks").catch(() => ({ tasks: [] })),
+                api.get("/workshops").catch(() => ({ workshops: [] })),
+                api.get("/papers").catch(() => ({ papers: [] })),
+                api.get("/activities").catch(() => ({ activities: [] })),
+                api.get("/kpis").catch(() => ({ kpis: [] }))
+            ]);
+
             const faculties = performanceData.faculties || [];
             setFacultyList(faculties);
             
-            // 2. Load approvals count to count pending approvals for department
-            const approvalData = await api.get("/approvals");
-            const pendingCount = (approvalData.approvals || []).filter(a => a.status === "SUBMITTED" && a.currentLevel === "HOD").length;
-            
-            // 3. Load tasks to count pending tasks in department
-            const taskData = await api.get("/tasks");
+            const pendingCount = (approvalData.approvals || []).filter(a => (a.status === "SUBMITTED" || a.status === "PENDING") && a.currentLevel === "HOD").length;
             const pendingTasksCount = (taskData.tasks || []).filter(t => t.status !== "completed").length;
 
-            // 4. Load workshops count in department
-            const workshopData = await api.get("/workshops");
-            
-            // 5. Load publications (papers) in department
-            const paperData = await api.get("/papers");
-
-            // 6. Load activities in department
-            const activityData = await api.get("/activities");
-
-            // 7. Load KPI progress to calculate kpiAchievement
-            const kpiData = await api.get("/kpis");
             const kpis = kpiData.kpis || [];
             let kpiProgressSum = 0;
             kpis.forEach(k => {
@@ -82,20 +83,19 @@ function HODDashboard({ currentUser, onSelectFaculty, setCurrentTab }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser]);
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center py-12">
-                <p className="text-slate-400 text-xs italic">Loading HOD Department data...</p>
-            </div>
-        );
-    }
-
     return (
         <div className="space-y-6 animate-fade-in text-xs">
             {/* Header briefing */}
             <div className="bg-[#101622] border border-slate-800 p-6 rounded-2xl flex items-center justify-between shadow-lg">
                 <div>
-                    <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Department Management Dashboard</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Department Management Dashboard</h2>
+                        {loading && (
+                            <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full animate-pulse border border-indigo-500/20">
+                                ⚡ Syncing
+                            </span>
+                        )}
+                    </div>
                     <p className="text-slate-400 mt-1">Monitor and manage your department metrics. Click any card to navigate directly to its section.</p>
                     <div className="mt-3.5 flex flex-col gap-1 text-[11px] text-slate-350">
                         <div>Department: <strong className="text-indigo-400">{currentUser.department}</strong></div>
