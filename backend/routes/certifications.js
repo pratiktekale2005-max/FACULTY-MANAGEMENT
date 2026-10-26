@@ -9,14 +9,20 @@ const { authenticateUser } = require("./authMiddleware");
 router.get("/", authenticateUser, async (req, res) => {
     try {
         const { role, organizationId } = req.user;
-        let query = { organizationId };
+        let query = {};
 
         // Role-based scoping
-        if (role === "HOD") {
-            const memberIds = await User.find({ organizationId, departmentId: req.user.departmentId }).distinct("_id");
-            query.facultyId = { $in: memberIds };
-        } else if (role === "Faculty") {
+        if (role === "Faculty") {
             query.facultyId = req.user._id;
+        } else if (role === "HOD") {
+            const memberIds = await User.find({ departmentId: req.user.departmentId }).distinct("_id");
+            query.facultyId = { $in: memberIds };
+        } else {
+            // Principal / Admin
+            if (organizationId) {
+                const memberIds = await User.find({ organizationId }).distinct("_id");
+                query.facultyId = { $in: memberIds };
+            }
         }
 
         // Support target faculty filtering (Principal and HOD only)
@@ -24,7 +30,7 @@ router.get("/", authenticateUser, async (req, res) => {
         if (filterUserId && filterUserId !== "all" && role !== "Faculty") {
             const mongoose = require("mongoose");
             if (mongoose.Types.ObjectId.isValid(filterUserId)) {
-                const targetUser = await User.findOne({ _id: filterUserId, organizationId });
+                const targetUser = await User.findById(filterUserId);
                 if (targetUser) {
                     if (role === "HOD" && String(targetUser.departmentId) !== String(req.user.departmentId)) {
                         return res.status(403).json({ error: "Access denied: target user belongs to another department ❌" });
@@ -34,33 +40,48 @@ router.get("/", authenticateUser, async (req, res) => {
             }
         }
 
-        // Filtering
-        if (req.query.certificateType && req.query.certificateType !== "All") {
-            query.certificateType = req.query.certificateType;
+        // Filtering by Type
+        const typeFilter = req.query.certificateType || req.query.type;
+        if (typeFilter && typeFilter !== "All" && typeFilter !== "all") {
+            query.certificateType = typeFilter;
         }
-        if (req.query.status && req.query.status !== "All") {
+
+        // Filtering by Status
+        if (req.query.status && req.query.status !== "All" && req.query.status !== "all") {
             query.status = req.query.status;
         }
 
-        // Search
+        // Filtering by Academic Year
+        if (req.query.academicYear && req.query.academicYear !== "All" && req.query.academicYear !== "all") {
+            query.academicYear = req.query.academicYear;
+        }
+
+        // Search in title, issuedBy, description, skills
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, "i");
             query.$or = [
                 { title: searchRegex },
                 { issuedBy: searchRegex },
-                { description: searchRegex }
+                { description: searchRegex },
+                { skills: searchRegex },
+                { certificateNumber: searchRegex }
             ];
+        }
+
+        // Date range filtering
+        if (req.query.startDate && req.query.endDate) {
+            query.issueDate = { $gte: req.query.startDate, $lte: req.query.endDate };
         }
 
         // Pagination parameters
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 100;
         const skip = (page - 1) * limit;
 
         // Sorting by Date
-        let sortOption = { issueDate: -1 }; // default sorting: Newest Issue Date first
-        if (req.query.sortBy === "issueDateAsc") {
-            sortOption = { issueDate: 1 };
+        let sortOption = { issueDate: -1, createdAt: -1 };
+        if (req.query.sortBy === "issueDateAsc" || req.query.sortBy === "asc") {
+            sortOption = { issueDate: 1, createdAt: 1 };
         }
 
         const total = await Certification.countDocuments(query);
@@ -78,7 +99,7 @@ router.get("/", authenticateUser, async (req, res) => {
             pages: Math.ceil(total / limit)
         });
     } catch (err) {
-        console.error(err);
+        console.error("Fetch certifications error:", err);
         res.status(500).json({ error: "Failed to fetch certifications ❌" });
     }
 });
@@ -87,7 +108,7 @@ router.get("/", authenticateUser, async (req, res) => {
 // GET /api/certifications/:id
 router.get("/:id", authenticateUser, async (req, res) => {
     try {
-        const cert = await Certification.findById(req.params.id).populate("facultyId", "name email department");
+        const cert = await Certification.findById(req.params.id).populate("facultyId", "name email department designation");
         if (!cert) {
             return res.status(404).json({ error: "Certification not found ❌" });
         }
@@ -101,25 +122,32 @@ router.get("/:id", authenticateUser, async (req, res) => {
 // ================= POST ADD CERTIFICATION =================
 // POST /api/certifications
 router.post("/", authenticateUser, async (req, res) => {
-    if (req.user.role !== "Faculty") {
-        return res.status(403).json({ error: "Access Denied: Only faculty can manage certifications ❌" });
+    if (req.user.role !== "Faculty" && req.user.role !== "Principal" && req.user.role !== "HOD") {
+        return res.status(403).json({ error: "Access Denied: Unauthorized to manage certifications ❌" });
     }
     const { 
         title, 
         issuedBy, 
         certificateType, 
+        type,
         description, 
+        skills,
+        academicYear,
         issueDate, 
         expiryDate, 
         certificateNumber, 
         credentialId, 
         verificationUrl, 
-        certificateFile 
+        certificateFile,
+        file 
     } = req.body;
 
+    const resolvedType = certificateType || type || "Training";
+    const resolvedFile = certificateFile || file || "";
+
     // Required fields validation
-    if (!title || !issuedBy || !certificateType || !issueDate) {
-        return res.status(400).json({ error: "Required fields are missing: Title, Issued By, Type, and Issue Date are required ❌" });
+    if (!title || !issuedBy || !issueDate) {
+        return res.status(400).json({ error: "Required fields are missing: Title, Issued By, and Issue Date are required ❌" });
     }
 
     try {
@@ -133,24 +161,27 @@ router.post("/", authenticateUser, async (req, res) => {
         }
 
         const newCert = new Certification({
+            organizationId: req.user.organizationId,
             facultyId: req.user._id,
             title,
             issuedBy,
-            certificateType,
+            certificateType: resolvedType,
             description: description || "",
+            skills: skills || "",
+            academicYear: academicYear || "2026-2027",
             issueDate,
             expiryDate: expiryDate || "",
-            certificateNumber: certificateNumber || "",
-            credentialId: credentialId || "",
+            certificateNumber: certificateNumber || credentialId || "",
+            credentialId: credentialId || certificateNumber || "",
             verificationUrl: verificationUrl || "",
-            certificateFile: certificateFile || "",
+            certificateFile: resolvedFile,
             status
         });
 
         await newCert.save();
         res.json({ message: "Certification added successfully! ✅", certification: newCert });
     } catch (err) {
-        console.error(err);
+        console.error("Save certification error:", err);
         res.status(500).json({ error: "Failed to save certification ❌" });
     }
 });
@@ -158,20 +189,21 @@ router.post("/", authenticateUser, async (req, res) => {
 // ================= PUT EDIT CERTIFICATION =================
 // PUT /api/certifications/:id
 router.put("/:id", authenticateUser, async (req, res) => {
-    if (req.user.role !== "Faculty") {
-        return res.status(403).json({ error: "Access Denied: Only faculty can manage certifications ❌" });
-    }
     const { 
         title, 
         issuedBy, 
         certificateType, 
+        type,
         description, 
+        skills,
+        academicYear,
         issueDate, 
         expiryDate, 
         certificateNumber, 
         credentialId, 
         verificationUrl, 
-        certificateFile 
+        certificateFile,
+        file 
     } = req.body;
 
     try {
@@ -187,14 +219,16 @@ router.put("/:id", authenticateUser, async (req, res) => {
 
         if (title) cert.title = title;
         if (issuedBy) cert.issuedBy = issuedBy;
-        if (certificateType) cert.certificateType = certificateType;
+        if (certificateType || type) cert.certificateType = certificateType || type;
         if (description !== undefined) cert.description = description;
+        if (skills !== undefined) cert.skills = skills;
+        if (academicYear !== undefined) cert.academicYear = academicYear;
         if (issueDate) cert.issueDate = issueDate;
         if (expiryDate !== undefined) cert.expiryDate = expiryDate;
         if (certificateNumber !== undefined) cert.certificateNumber = certificateNumber;
         if (credentialId !== undefined) cert.credentialId = credentialId;
         if (verificationUrl !== undefined) cert.verificationUrl = verificationUrl;
-        if (certificateFile !== undefined) cert.certificateFile = certificateFile;
+        if (certificateFile !== undefined || file !== undefined) cert.certificateFile = certificateFile || file || "";
 
         // Re-evaluate status
         if (cert.expiryDate) {
@@ -207,7 +241,7 @@ router.put("/:id", authenticateUser, async (req, res) => {
         await cert.save();
         res.json({ message: "Certification updated successfully! ✅", certification: cert });
     } catch (err) {
-        console.error(err);
+        console.error("Update certification error:", err);
         res.status(500).json({ error: "Failed to update certification ❌" });
     }
 });
@@ -215,9 +249,6 @@ router.put("/:id", authenticateUser, async (req, res) => {
 // ================= DELETE CERTIFICATION =================
 // DELETE /api/certifications/:id
 router.delete("/:id", authenticateUser, async (req, res) => {
-    if (req.user.role !== "Faculty") {
-        return res.status(403).json({ error: "Access Denied: Only faculty can manage certifications ❌" });
-    }
     try {
         const cert = await Certification.findById(req.params.id);
         if (!cert) {
@@ -232,7 +263,7 @@ router.delete("/:id", authenticateUser, async (req, res) => {
         await Certification.findByIdAndDelete(req.params.id);
         res.json({ message: "Certification deleted successfully ✅" });
     } catch (err) {
-        console.error(err);
+        console.error("Delete certification error:", err);
         res.status(500).json({ error: "Failed to delete certification ❌" });
     }
 });

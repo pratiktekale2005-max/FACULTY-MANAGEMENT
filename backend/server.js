@@ -29,6 +29,13 @@ const notificationsRoutes = require("./routes/notifications");
 const certificationsRoutes = require("./routes/certifications");
 const assignmentsRoutes = require("./routes/assignments");
 const lettersRoutes = require("./routes/letters");
+const classesRoutes = require("./routes/classesRoutes");
+const timetableRoutes = require("./routes/timetableRoutes");
+const attendanceManagementRoutes = require("./routes/attendanceManagementRoutes");
+const assignmentMarksRoutes = require("./routes/assignmentMarksRoutes");
+const leavesRoutes = require("./routes/leavesRoutes");
+const noticesRoutes = require("./routes/noticesRoutes");
+const submissionRoutes = require("./routes/submissionRoutes");
 
 // Create app
 const app = express();
@@ -134,6 +141,27 @@ app.use("/api/assignments", assignmentsRoutes);
 
 // ================= OFFICIAL LETTERS ROUTES =================
 app.use("/api/letters", lettersRoutes);
+
+// ================= MY CLASSES ROUTES =================
+app.use("/api/classes", classesRoutes);
+
+// ================= TIMETABLE ROUTES =================
+app.use("/api/timetable", timetableRoutes);
+
+// ================= ATTENDANCE MANAGEMENT ROUTES =================
+app.use("/api/attendance", attendanceManagementRoutes);
+
+// ================= ASSIGNMENT MARKS ROUTES =================
+app.use("/api/assignment-marks", assignmentMarksRoutes);
+
+// ================= LEAVES MANAGEMENT ROUTES =================
+app.use("/api/leaves", leavesRoutes);
+
+// ================= NOTICES / ANNOUNCEMENTS ROUTES =================
+app.use("/api/notices", noticesRoutes);
+
+// ================= SUBMISSIONS ROUTES =================
+app.use("/api/submissions", submissionRoutes);
 
 // ================= SERVER START =================
 const PORT = 5000;

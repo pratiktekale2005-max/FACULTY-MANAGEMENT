@@ -109,6 +109,10 @@ router.post("/", authenticateUser, async (req, res) => {
         return res.status(400).json({ error: "Required fields are missing: Subject, Title, Given Date, and Deadline Date are required ❌" });
     }
 
+    if (new Date(deadlineDate) < new Date(givenDate)) {
+        return res.status(400).json({ error: "Invalid due date: Due date cannot be earlier than created / given date ❌" });
+    }
+
     try {
         const subject = await Subject.findById(subjectId);
         if (!subject) {
@@ -163,6 +167,12 @@ router.put("/:id", authenticateUser, async (req, res) => {
         // Access check
         if (req.user.role === "Faculty" && String(ass.facultyId) !== String(req.user._id)) {
             return res.status(403).json({ error: "Access denied: cannot edit another faculty's assignment ❌" });
+        }
+
+        const finalGivenDate = givenDate || ass.givenDate;
+        const finalDeadlineDate = deadlineDate || ass.deadlineDate;
+        if (finalGivenDate && finalDeadlineDate && new Date(finalDeadlineDate) < new Date(finalGivenDate)) {
+            return res.status(400).json({ error: "Invalid due date: Due date cannot be earlier than created / given date ❌" });
         }
 
         if (subjectId) ass.subjectId = subjectId;

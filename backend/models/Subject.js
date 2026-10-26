@@ -51,19 +51,29 @@ const studentSchema = new mongoose.Schema({
     rollNo: { type: String, required: true },
     name: { type: String, required: true },
     gender: { type: String, enum: ["Male", "Female", "Other"], default: "Male" },
-    mobileNumber: { type: String, required: true },
-    prnNumber: { type: String, required: true },
+    mobileNumber: { type: String, default: "" },
+    prnNumber: { type: String, default: "" },
     skills: { type: String, default: "" },
     division: { type: String, default: "" }, // Assigned division A, B, etc.
+    email: { type: String, default: "" },
+    address: { type: String, default: "" },
     internalMarks: {
         cia: { type: Number, default: 0 },
         mse: { type: Number, default: 0 },
         ese: { type: Number, default: 0 },
         practical: { type: Number, default: 0 }
     },
+    assignmentMarks: {
+        a1: { type: Number, default: null },
+        a2: { type: Number, default: null },
+        a3: { type: Number, default: null },
+        a4: { type: Number, default: null },
+        a5: { type: Number, default: null },
+        total: { type: Number, default: 0 }
+    },
     attendance: [{
         date: { type: String }, // YYYY-MM-DD
-        status: { type: String, enum: ["PRESENT", "ABSENT"], default: "PRESENT" }
+        status: { type: String, enum: ["PRESENT", "ABSENT", "ON_LEAVE"], default: "PRESENT" }
     }],
     customFields: { type: Map, of: String, default: {} },
     year: { type: String, default: "" },

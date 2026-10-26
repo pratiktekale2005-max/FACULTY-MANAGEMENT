@@ -936,7 +936,7 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                             {/* Faculty Submitter link */}
                                             <div className="border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-400">
                                                 <div>
-                                                    Logged by:{" "}
+                                                    Organized by:{" "}
                                                     <button
                                                         type="button"
                                                         onClick={() => {

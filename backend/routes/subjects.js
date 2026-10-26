@@ -94,8 +94,11 @@ router.get("/department-students", authenticateUser, async (req, res) => {
                         rollNo: st.rollNo,
                         name: st.name,
                         gender: st.gender || "Male",
+                        email: st.email || "",
+                        address: st.address || "",
                         department: st.department || deptName,
                         year: st.year || subj.academicYear || "SE",
+                        yearOfStudy: st.year || subj.academicYear || "SE",
                         division: st.division || "-",
                         mobileNumber: st.mobileNumber || "",
                         prnNumber: st.prnNumber || "",
@@ -118,6 +121,12 @@ router.get("/department-students", authenticateUser, async (req, res) => {
                     }
                     if (!existing.gender && st.gender) {
                         existing.gender = st.gender;
+                    }
+                    if (!existing.email && st.email) {
+                        existing.email = st.email;
+                    }
+                    if (!existing.address && st.address) {
+                        existing.address = st.address;
                     }
                 }
             }
@@ -446,8 +455,10 @@ router.put("/:id/import-students", authenticateUser, async (req, res) => {
                     rollNo: s.rollNo,
                     name: s.name,
                     gender: s.gender || "Male",
+                    email: s.email || `${s.rollNo.toLowerCase()}@dypcoei.edu.in`,
                     mobileNumber: s.mobileNumber,
                     prnNumber: s.prnNumber,
+                    address: s.address || "Pune, Maharashtra",
                     division: s.division || "",
                     skills: s.skills || "",
                     year: s.year || subject.academicYear || "SE",
@@ -473,7 +484,7 @@ router.put("/:id/import-students", authenticateUser, async (req, res) => {
 // PUT /api/subjects/:id/students/:studentId
 router.put("/:id/students/:studentId", authenticateUser, async (req, res) => {
     const { id, studentId } = req.params;
-    const { mobileNumber, prnNumber, skills, division, customFields } = req.body;
+    const { mobileNumber, prnNumber, skills, division, email, address, customFields } = req.body;
 
     try {
         const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
@@ -502,6 +513,8 @@ router.put("/:id/students/:studentId", authenticateUser, async (req, res) => {
 
             if (skills !== undefined) subject.students[index].skills = skills;
             if (division !== undefined) subject.students[index].division = division;
+            if (email !== undefined) subject.students[index].email = email;
+            if (address !== undefined) subject.students[index].address = address;
             if (customFields !== undefined) {
                 subject.students[index].customFields = customFields;
             }

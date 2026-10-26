@@ -473,7 +473,7 @@ const sendInvitationEmail = async ({ guestEmail, guestName, eventTitle, eventTyp
             throw err;
         }
         console.error("[EMAIL SERVICE] SMTP error while dispatching invitation:", err);
-        throw new Error(err.message || "Failed to dispatch invitation email via SMTP ❌");
+        throw new Error(formatEmailError(err));
     }
 };
 
@@ -561,7 +561,7 @@ const sendThankingEmail = async ({ guestEmail, guestName, eventTitle, eventType,
             throw err;
         }
         console.error("[EMAIL SERVICE] SMTP error while dispatching thanking letter:", err);
-        throw new Error(err.message || "Failed to dispatch appreciation letter via SMTP ❌");
+        throw new Error(formatEmailError(err));
     }
 };
 
@@ -678,13 +678,13 @@ const sendOfficialLetterEmail = async ({
     const emailUser = process.env.EMAIL_USER;
     const emailPass = process.env.EMAIL_PASS;
 
-    if (!emailUser || !emailPass) {
-        console.warn("⚠️ SMTP credentials missing. Official letter email simulated locally.");
-        return { success: true, simulated: true };
-    }
-
     if (!recipientEmail) {
         throw new Error("Recipient email address is required to dispatch official letter ❌");
+    }
+
+    if (!emailUser || !emailPass) {
+        console.warn("⚠️ SMTP credentials missing in environment variables.");
+        throw new Error("SMTP Email Service is not configured on the server. Please add EMAIL_USER and EMAIL_PASS (App Password) to backend/.env to dispatch live letters ❌");
     }
 
     try {
@@ -813,7 +813,553 @@ const sendOfficialLetterEmail = async ({
         return { success: true, recipient: recipientEmail };
     } catch (err) {
         console.error("[EMAIL SERVICE] Error dispatching official letter email:", err);
-        throw new Error(err.message || "Failed to dispatch official letter via SMTP ❌");
+        throw new Error(formatEmailError(err));
+    }
+};
+
+/**
+ * Diagnostic error formatter for SMTP exceptions
+ */
+function formatEmailError(err) {
+    if (!err) return "Email delivery failed due to unknown error ❌";
+    const msg = err.message || "";
+    if (msg.includes("535") || msg.includes("BadCredentials") || msg.includes("Username and Password not accepted")) {
+        return "SMTP Authentication Failed: Google rejected credentials (535 BadCredentials). Please ensure 2-Step Verification is enabled and generate a fresh 16-character App Password at https://myaccount.google.com/apppasswords, then set EMAIL_PASS in backend/.env 🔑❌";
+    }
+    if (msg.includes("ETIMEDOUT") || msg.includes("timeout")) {
+        return "SMTP Connection Timed Out: Could not connect to mail server. Please verify internet connectivity 🌐❌";
+    }
+    return `SMTP Error: ${msg}`;
+}
+
+/**
+ * Common Transporter Builder
+ */
+const getTransporter = () => {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+
+    if (!emailUser || !emailPass) {
+        throw new Error("SMTP Email Service is not configured on the server. Please add EMAIL_USER and EMAIL_PASS to backend/.env ❌");
+    }
+
+    return nodemailer.createTransport({
+        service: "gmail",
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        auth: {
+            user: emailUser,
+            pass: emailPass
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000
+    });
+};
+
+/**
+ * 1. Task Assignment Email (Requirement 3)
+ * Dispatched to the selected faculty member when an HOD or Principal assigns a task.
+ */
+const sendTaskAssignmentEmail = async ({
+    facultyEmail,
+    facultyName,
+    taskTitle,
+    description = "",
+    dueDate,
+    priority = "Medium",
+    assignedByName = "Head of Department",
+    assignedByRole = "HOD",
+    department = "",
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!facultyEmail) {
+        console.warn("[EMAIL SERVICE] Cannot dispatch task email: No faculty email provided");
+        return { success: false, error: "No recipient email" };
+    }
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const priorityColor = priority.toLowerCase() === "high" ? "#e11d48" : (priority.toLowerCase() === "low" ? "#10b981" : "#f59e0b");
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="background-color: #4f46e5; padding: 20px 24px; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 19px; font-weight: bold;">New Task Assigned: "${taskTitle}"</h2>
+                        <p style="margin: 4px 0 0 0; font-size: 11px; color: #c7d2fe; text-transform: uppercase; letter-spacing: 0.5px;">EduCRM Academic Steering Portal</p>
+                    </div>
+                    <div style="padding: 24px;">
+                        <p style="margin: 0 0 14px 0; font-size: 14px; font-weight: 600;">Dear ${facultyName || "Faculty Member"},</p>
+                        <p style="margin: 0 0 16px 0; font-size: 13.5px; color: #475569; line-height: 1.5;">
+                            A new departmental task has been assigned to you by <strong>${assignedByName}</strong> (${assignedByRole}${department ? ` - ${department}` : ""}).
+                        </p>
+
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 18px 0; font-size: 13px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Task Title:</span>
+                                <div style="font-weight: bold; color: #0f172a; font-size: 14px; margin-top: 2px;">${taskTitle}</div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Due Date / Deadline:</span>
+                                <div style="font-weight: 600; color: #1e1b4b; margin-top: 2px;">📅 ${dueDate || "As specified"}</div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Priority:</span>
+                                <div style="margin-top: 2px;">
+                                    <span style="display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; color: #ffffff; background-color: ${priorityColor}; text-transform: uppercase;">
+                                        ${priority} Priority
+                                    </span>
+                                </div>
+                            </div>
+                            ${description ? `
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Instructions / Details:</span>
+                                <div style="color: #334155; margin-top: 4px; line-height: 1.5; white-space: pre-wrap;">${description}</div>
+                            </div>
+                            ` : ""}
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px 0;">
+                            <a href="${crmUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);">
+                                📋 Open Task in EduCRM Portal
+                            </a>
+                        </div>
+                        <p style="margin: 0; font-size: 11px; color: #94a3b8; text-align: center;">
+                            Log in to EduCRM and open the <strong>Tasks</strong> section to report progress or submit completion.
+                        </p>
+                    </div>
+                    <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 12px 24px; font-size: 10.5px; color: #94a3b8; text-align: center;">
+                        Automated institutional communication from EduCRM Academic Hub.
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"${assignedByName} via EduCRM" <${emailUser}>`,
+            to: facultyEmail,
+            subject: `New Task Assignment: "${taskTitle}" (Due: ${dueDate})`,
+            html: htmlContent
+        });
+
+        console.log(`[EMAIL SERVICE] Successfully dispatched task assignment email to ${facultyEmail} 📧✅`);
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error dispatching task assignment email:", err);
+        return { success: false, error: formatEmailError(err) };
+    }
+};
+
+/**
+ * 2. Faculty Leave Request Email to HOD (Requirement 4)
+ */
+const sendLeaveRequestToHOD = async ({
+    hodEmail,
+    hodName = "Head of Department",
+    facultyName,
+    department,
+    leaveType = "Casual Leave",
+    subject = "Leave Application",
+    startDate,
+    endDate,
+    daysCount,
+    reason = "",
+    hasAttachment = false,
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!hodEmail) {
+        console.warn("[EMAIL SERVICE] Cannot dispatch leave email: No HOD email configured");
+        return { success: false, error: "No HOD email" };
+    }
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="background-color: #0284c7; padding: 20px 24px; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 19px; font-weight: bold;">New Leave Application: ${facultyName}</h2>
+                        <p style="margin: 4px 0 0 0; font-size: 11px; color: #bae6fd; text-transform: uppercase; letter-spacing: 0.5px;">Pending HOD Review • ${department || "Department"}</p>
+                    </div>
+                    <div style="padding: 24px;">
+                        <p style="margin: 0 0 14px 0; font-size: 14px; font-weight: 600;">Respected ${hodName},</p>
+                        <p style="margin: 0 0 16px 0; font-size: 13.5px; color: #475569; line-height: 1.5;">
+                            Faculty member <strong>${facultyName}</strong> has submitted a new leave application for your review and recommendation.
+                        </p>
+
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 18px 0; font-size: 13px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Leave Type:</span>
+                                <div style="font-weight: bold; color: #0f172a; font-size: 14px; margin-top: 2px;">${leaveType}</div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Subject / Reason:</span>
+                                <div style="color: #1e1b4b; font-weight: 600; margin-top: 2px;">${subject}</div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Dates & Duration:</span>
+                                <div style="font-weight: 600; color: #0284c7; margin-top: 2px;">📅 ${startDate} to ${endDate} (${daysCount || 1} day(s))</div>
+                            </div>
+                            ${reason ? `
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Detailed Explanation:</span>
+                                <div style="color: #334155; margin-top: 4px; line-height: 1.5;">${reason}</div>
+                            </div>
+                            ` : ""}
+                            ${hasAttachment ? `
+                            <div style="margin-top: 10px; padding-top: 8px; font-size: 12px; color: #4338ca; font-weight: 600;">
+                                📎 Supporting document / medical certificate attached in portal.
+                            </div>
+                            ` : ""}
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px 0;">
+                            <a href="${crmUrl}" style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);">
+                                🔍 Review & Endorse Application
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"EduCRM Portal" <${emailUser}>`,
+            to: hodEmail,
+            subject: `Leave Application for Review: ${facultyName} (${startDate} to ${endDate})`,
+            html: htmlContent
+        });
+
+        console.log(`[EMAIL SERVICE] Dispatched leave request email to HOD ${hodEmail} 📧✅`);
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error dispatching leave email to HOD:", err);
+        return { success: false, error: formatEmailError(err) };
+    }
+};
+
+/**
+ * 3. Faculty Workshop / Event Request Email to HOD (Requirement 4)
+ */
+const sendWorkshopRequestToHOD = async ({
+    hodEmail,
+    hodName = "Head of Department",
+    facultyName,
+    department,
+    workshopTitle,
+    date,
+    time = "",
+    venue = "",
+    speakerName = "",
+    description = "",
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!hodEmail) {
+        console.warn("[EMAIL SERVICE] Cannot dispatch workshop approval email: No HOD email configured");
+        return { success: false, error: "No HOD email" };
+    }
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="background-color: #7c3aed; padding: 20px 24px; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 19px; font-weight: bold;">New Workshop / Event Proposal: "${workshopTitle}"</h2>
+                        <p style="margin: 4px 0 0 0; font-size: 11px; color: #ddd6fe; text-transform: uppercase; letter-spacing: 0.5px;">Pending HOD Approval • ${department || "Department"}</p>
+                    </div>
+                    <div style="padding: 24px;">
+                        <p style="margin: 0 0 14px 0; font-size: 14px; font-weight: 600;">Respected ${hodName},</p>
+                        <p style="margin: 0 0 16px 0; font-size: 13.5px; color: #475569; line-height: 1.5;">
+                            Faculty member <strong>${facultyName}</strong> has logged a proposed academic workshop / seminar for departmental endorsement.
+                        </p>
+
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 18px 0; font-size: 13px;">
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Event Title:</span>
+                                <div style="font-weight: bold; color: #0f172a; font-size: 14px; margin-top: 2px;">${workshopTitle}</div>
+                            </div>
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Proposed Date & Time:</span>
+                                <div style="font-weight: 600; color: #1e1b4b; margin-top: 2px;">📅 ${date} ${time ? `(${time})` : ""}</div>
+                            </div>
+                            ${venue ? `
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Venue / Hall:</span>
+                                <div style="color: #334155; margin-top: 2px;">📍 ${venue}</div>
+                            </div>` : ""}
+                            ${speakerName ? `
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Resource Person / Speaker:</span>
+                                <div style="color: #334155; margin-top: 2px;">👤 ${speakerName}</div>
+                            </div>` : ""}
+                            ${description ? `
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Session Scope / Description:</span>
+                                <div style="color: #334155; margin-top: 4px; line-height: 1.5;">${description}</div>
+                            </div>` : ""}
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px 0;">
+                            <a href="${crmUrl}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 28px; border-radius: 8px; text-decoration: none; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);">
+                                🎯 Review Event in Portal
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"EduCRM Portal" <${emailUser}>`,
+            to: hodEmail,
+            subject: `Event Approval Request: "${workshopTitle}" by ${facultyName}`,
+            html: htmlContent
+        });
+
+        console.log(`[EMAIL SERVICE] Dispatched workshop approval email to HOD ${hodEmail} 📧✅`);
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error dispatching workshop email to HOD:", err);
+        return { success: false, error: formatEmailError(err) };
+    }
+};
+
+/**
+ * 4. Leave Forwarded to Principal for Final Sanction (Requirement 6)
+ */
+const sendLeaveForwardedToPrincipal = async ({
+    principalEmail,
+    principalName = "Dr. Suresh Mali",
+    facultyName,
+    department,
+    leaveType = "Leave Application",
+    subject = "",
+    startDate,
+    endDate,
+    hodName,
+    hodRemarks = "",
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!principalEmail) {
+        console.warn("[EMAIL SERVICE] Cannot dispatch principal email: No Principal email configured");
+        return { success: false, error: "No Principal email" };
+    }
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="background-color: #b91c1c; padding: 20px 24px; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 19px; font-weight: bold;">Leave Sanction Queue: ${facultyName}</h2>
+                        <p style="margin: 4px 0 0 0; font-size: 11px; color: #fecaca; text-transform: uppercase; letter-spacing: 0.5px;">Endorsed by HOD • Awaiting Principal Sanction</p>
+                    </div>
+                    <div style="padding: 24px;">
+                        <p style="margin: 0 0 14px 0; font-size: 14px; font-weight: 600;">Respected Principal ${principalName},</p>
+                        <p style="margin: 0 0 16px 0; font-size: 13.5px; color: #475569; line-height: 1.5;">
+                            A leave request from <strong>${facultyName}</strong> (Department of ${department}) has been recommended by HOD <strong>${hodName}</strong> and forwarded to your executive queue for final institutional sanction.
+                        </p>
+
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 18px 0; font-size: 13px;">
+                            <div style="margin-bottom: 6px;"><strong>Leave Type:</strong> ${leaveType}</div>
+                            <div style="margin-bottom: 6px;"><strong>Subject:</strong> ${subject}</div>
+                            <div style="margin-bottom: 6px;"><strong>Dates:</strong> 📅 ${startDate} to ${endDate}</div>
+                            ${hodRemarks ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; color: #0f172a;"><strong>HOD Recommendation Remarks:</strong> "${hodRemarks}"</div>` : ""}
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px 0;">
+                            <a href="${crmUrl}" style="display: inline-block; background-color: #b91c1c; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 28px; border-radius: 8px; text-decoration: none;">
+                                🛡️ Open Principal Approvals Queue
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"EduCRM Portal" <${emailUser}>`,
+            to: principalEmail,
+            subject: `Principal Review Queue: Leave Request by ${facultyName} (${startDate} to ${endDate})`,
+            html: htmlContent
+        });
+
+        console.log(`[EMAIL SERVICE] Dispatched forwarded leave email to Principal ${principalEmail} 📧✅`);
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error notifying Principal:", err);
+        return { success: false, error: formatEmailError(err) };
+    }
+};
+
+/**
+ * 5. Approval Decision Email to Faculty (Requirements 4, 5, 6)
+ * Dispatched to faculty when HOD or Principal approves, rejects, or returns an application.
+ */
+const sendApprovalDecisionToFaculty = async ({
+    facultyEmail,
+    facultyName,
+    requestType = "Request",
+    refNo = "",
+    status, // "APPROVED" | "REJECTED" | "HOD_APPROVED" | "RETURNED"
+    approverName,
+    approverRole,
+    remarks = "",
+    dates = "",
+    subject = "",
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!facultyEmail) {
+        console.warn("[EMAIL SERVICE] Cannot dispatch decision email: No faculty email provided");
+        return { success: false, error: "No faculty email" };
+    }
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const isApproved = status === "APPROVED";
+        const isHodEndorsed = status === "HOD_APPROVED";
+        const isRejected = status === "REJECTED";
+
+        const badgeBg = isApproved ? "#10b981" : (isHodEndorsed ? "#0284c7" : (isRejected ? "#e11d48" : "#f59e0b"));
+        const displayStatus = isApproved 
+            ? "APPROVED & SANCTIONED" 
+            : isHodEndorsed 
+                ? "ENDORSED BY HOD (FORWARDED TO PRINCIPAL)" 
+                : (isRejected ? "REJECTED" : status);
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                    <div style="background-color: ${badgeBg}; padding: 20px 24px; color: #ffffff;">
+                        <h2 style="margin: 0; font-size: 19px; font-weight: bold;">Decision Update: ${requestType}</h2>
+                        <p style="margin: 4px 0 0 0; font-size: 11px; color: #ffffff; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px;">Status: ${displayStatus}</p>
+                    </div>
+                    <div style="padding: 24px;">
+                        <p style="margin: 0 0 14px 0; font-size: 14px; font-weight: 600;">Dear ${facultyName || "Faculty Member"},</p>
+                        <p style="margin: 0 0 16px 0; font-size: 13.5px; color: #475569; line-height: 1.5;">
+                            Your <strong>${requestType}</strong> (${subject || "Submission"}) has been processed by <strong>${approverName}</strong> (${approverRole}).
+                        </p>
+
+                        <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin: 18px 0; font-size: 13px;">
+                            ${refNo ? `<div style="margin-bottom: 6px;"><strong>Reference No:</strong> <span style="font-family: monospace;">${refNo}</span></div>` : ""}
+                            <div style="margin-bottom: 6px;">
+                                <strong>Decision Status:</strong> 
+                                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #ffffff; background-color: ${badgeBg}; text-transform: uppercase;">
+                                    ${displayStatus}
+                                </span>
+                            </div>
+                            ${dates ? `<div style="margin-bottom: 6px;"><strong>Applicable Dates:</strong> 📅 ${dates}</div>` : ""}
+                            ${remarks ? `
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                                <strong>Approver Remarks:</strong>
+                                <div style="color: #334155; margin-top: 4px; font-style: italic;">"${remarks}"</div>
+                            </div>
+                            ` : ""}
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px 0;">
+                            <a href="${crmUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; font-weight: bold; font-size: 13px; padding: 12px 28px; border-radius: 8px; text-decoration: none;">
+                                📄 View Record in EduCRM
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"EduCRM Portal" <${emailUser}>`,
+            to: facultyEmail,
+            subject: `Decision on ${requestType}: ${displayStatus} (${refNo || facultyName})`,
+            html: htmlContent
+        });
+
+        console.log(`[EMAIL SERVICE] Dispatched decision email to ${facultyEmail} (${status}) 📧✅`);
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error dispatching decision email to faculty:", err);
+        return { success: false, error: formatEmailError(err) };
+    }
+};
+
+/**
+ * 6. Decision Update to HOD when Principal takes action (Requirement 6)
+ */
+const sendPrincipalDecisionToHOD = async ({
+    hodEmail,
+    hodName = "HOD",
+    facultyName,
+    requestType,
+    refNo,
+    status,
+    principalName = "Dr. Suresh Mali",
+    remarks = "",
+    crmUrl = "http://localhost:3000"
+}) => {
+    if (!hodEmail) return { success: false };
+
+    try {
+        const transporter = getTransporter();
+        const emailUser = process.env.EMAIL_USER;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial, sans-serif; background-color: #f8fafc; padding: 20px; color: #1e293b; margin: 0;">
+                <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px;">
+                    <h3 style="margin-top: 0; color: #0f172a;">Executive Decision Intimation: ${requestType}</h3>
+                    <p style="font-size: 13.5px; color: #475569;">
+                        Dear ${hodName}, Principal ${principalName} has concluded the review on the ${requestType.toLowerCase()} submission from <strong>${facultyName}</strong> with status: <strong>${status}</strong>.
+                    </p>
+                    ${remarks ? `<p style="font-size: 12.5px; color: #64748b; background: #f8fafc; padding: 10px; border-radius: 6px;">Principal Remarks: "${remarks}"</p>` : ""}
+                    <p style="font-size: 11px; color: #94a3b8; margin-top: 20px;">Ref No: ${refNo || "N/A"} &bull; EduCRM Institutional Hub</p>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await transporter.sendMail({
+            from: `"EduCRM Portal" <${emailUser}>`,
+            to: hodEmail,
+            subject: `Principal Decision Intimation: ${requestType} (${facultyName} - ${status})`,
+            html: htmlContent
+        });
+        return { success: true };
+    } catch (err) {
+        console.error("[EMAIL SERVICE] Error notifying HOD of Principal decision:", err);
+        return { success: false };
     }
 };
 
@@ -826,6 +1372,13 @@ module.exports = {
     sendWorkshopApprovalEmail,
     sendOfficialLetterEmail,
     getFacultyTransporter,
-    verifyFacultyCredentials
+    verifyFacultyCredentials,
+    sendTaskAssignmentEmail,
+    sendLeaveRequestToHOD,
+    sendWorkshopRequestToHOD,
+    sendLeaveForwardedToPrincipal,
+    sendApprovalDecisionToFaculty,
+    sendPrincipalDecisionToHOD,
+    formatEmailError
 };
 

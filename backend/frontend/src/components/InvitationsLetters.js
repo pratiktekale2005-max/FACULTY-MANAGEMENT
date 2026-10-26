@@ -25,6 +25,34 @@ function InvitationsLetters({ currentUser }) {
     const [feedbackMsg, setFeedbackMsg] = useState(null);
     const [viewDetailModal, setViewDetailModal] = useState(null);
 
+    // ================= OFFICIAL LETTERS REGISTER STATE (Requirement 2) =================
+    const [registers, setRegisters] = useState([]);
+    const [isLoadingRegister, setIsLoadingRegister] = useState(false);
+    const [registerSearch, setRegisterSearch] = useState("");
+    const [registerTypeFilter, setRegisterTypeFilter] = useState("all");
+    const [registerEntryFilter, setRegisterEntryFilter] = useState("all");
+    const [registerDeptFilter, setRegisterDeptFilter] = useState("all");
+    const [registerModalOpen, setRegisterModalOpen] = useState(false);
+    const [editingRegister, setEditingRegister] = useState(null);
+    const [viewRegisterModal, setViewRegisterModal] = useState(null);
+    const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
+
+    const initialRegisterForm = {
+        registerTitle: "",
+        registerNumber: "",
+        letterType: "Inward",
+        subject: "",
+        senderOrRecipient: "",
+        entryType: "Inward",
+        letterDate: new Date().toISOString().split("T")[0],
+        receivedOrDispatchDate: new Date().toISOString().split("T")[0],
+        department: "",
+        description: "",
+        attachment: "",
+        attachmentName: ""
+    };
+    const [registerForm, setRegisterForm] = useState(initialRegisterForm);
+
     // Dynamic sender details based on logged-in user (Section 2 & 6)
     const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Adsul Mam" : "Faculty Member");
     const senderDesignation = isPrincipal 
@@ -156,8 +184,119 @@ function InvitationsLetters({ currentUser }) {
     useEffect(() => {
         if (activeTab === "audit") {
             fetchAuditHistory();
+        } else if (activeTab === "register") {
+            fetchRegisters();
         }
     }, [activeTab]);
+
+    // Fetch official letters registers (Requirement 2)
+    const fetchRegisters = async () => {
+        setIsLoadingRegister(true);
+        try {
+            const res = await api.get("/letters/register");
+            if (res && res.registers) {
+                setRegisters(res.registers);
+            }
+        } catch (err) {
+            console.error("Failed to load letters register:", err);
+        } finally {
+            setIsLoadingRegister(false);
+        }
+    };
+
+    const handleOpenCreateRegister = () => {
+        setEditingRegister(null);
+        setRegisterForm({
+            ...initialRegisterForm,
+            registerNumber: `REG/${(senderDept || "OFFICE").toUpperCase().slice(0, 4)}/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`,
+            department: senderDept || "General Administration"
+        });
+        setRegisterModalOpen(true);
+    };
+
+    const handleOpenEditRegister = (reg) => {
+        setEditingRegister(reg);
+        setRegisterForm({
+            registerTitle: reg.registerTitle || "",
+            registerNumber: reg.registerNumber || "",
+            letterType: reg.letterType || "Inward",
+            subject: reg.subject || "",
+            senderOrRecipient: reg.senderOrRecipient || "",
+            entryType: reg.entryType || "Inward",
+            letterDate: reg.letterDate ? new Date(reg.letterDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+            receivedOrDispatchDate: reg.receivedOrDispatchDate ? new Date(reg.receivedOrDispatchDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+            department: reg.department || senderDept || "General Administration",
+            description: reg.description || "",
+            attachment: reg.attachment || "",
+            attachmentName: reg.attachmentName || ""
+        });
+        setRegisterModalOpen(true);
+    };
+
+    const handleRegisterFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File size exceeds 5MB limit ❌");
+            e.target.value = "";
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            setRegisterForm(prev => ({
+                ...prev,
+                attachment: reader.result,
+                attachmentName: file.name
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleSaveRegister = async (e) => {
+        e.preventDefault();
+        if (!registerForm.registerTitle.trim() || !registerForm.registerNumber.trim() || !registerForm.subject.trim() || !registerForm.senderOrRecipient.trim()) {
+            alert("Please fill in all required fields (Title, Register Number, Subject, Sender/Recipient) ❌");
+            return;
+        }
+
+        setIsSubmittingRegister(true);
+        try {
+            if (editingRegister) {
+                await api.put(`/letters/register/${editingRegister._id}`, registerForm);
+                setFeedbackMsg({
+                    type: "success",
+                    text: "Official letter register entry updated successfully! ✅"
+                });
+            } else {
+                await api.post("/letters/register", registerForm);
+                setFeedbackMsg({
+                    type: "success",
+                    text: "New official letter register entry saved successfully! ✅"
+                });
+            }
+            setRegisterModalOpen(false);
+            fetchRegisters();
+        } catch (err) {
+            console.error("Save register entry error:", err);
+            alert(err.response?.data?.error || err.message || "Failed to save register entry ❌");
+        } finally {
+            setIsSubmittingRegister(false);
+        }
+    };
+
+    const handleDeleteRegister = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this register record?")) return;
+        try {
+            await api.delete(`/letters/register/${id}`);
+            setFeedbackMsg({
+                type: "success",
+                text: "Register record deleted successfully! ✅"
+            });
+            fetchRegisters();
+        } catch (err) {
+            alert(err.response?.data?.error || err.message || "Failed to delete register record ❌");
+        }
+    };
 
     // Update bodyText whenever template or relevant fields change
     useEffect(() => {
@@ -511,6 +650,23 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                             </span>
                         )}
                     </button>
+                    {(isHOD || isPrincipal) && (
+                        <button
+                            onClick={() => setActiveTab("register")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                activeTab === "register"
+                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30"
+                                    : "text-slate-400 hover:text-slate-200"
+                            }`}
+                        >
+                            <span>📑 Official Register</span>
+                            {registers.length > 0 && (
+                                <span className="bg-indigo-900/80 text-indigo-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                                    {registers.length}
+                                </span>
+                            )}
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -1353,6 +1509,554 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 </table>
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* ================= TAB 3: OFFICIAL LETTERS REGISTER (Requirement 2) ================= */}
+            {activeTab === "register" && (isHOD || isPrincipal) && (
+                <div className="space-y-4">
+                    {/* Header with New Register button */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-950/40 p-4 rounded-xl border border-slate-850">
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <span>📑 Official Letters Register</span>
+                                <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                    Permanent Records &amp; Documents
+                                </span>
+                            </h3>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                                Track inward and outward official letters, university circulars, government orders, institutional notices, and attachments.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={fetchRegisters}
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                                title="Refresh Register"
+                            >
+                                🔄 Refresh
+                            </button>
+                            <button
+                                onClick={handleOpenCreateRegister}
+                                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-600/20 flex items-center gap-1.5 text-xs"
+                            >
+                                <span>➕ New Register</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter and Search Bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <div>
+                            <input
+                                type="text"
+                                className="w-full text-xs text-slate-200 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                placeholder="🔍 Search title, ref no, sender, subject..."
+                                value={registerSearch}
+                                onChange={(e) => setRegisterSearch(e.target.value)}
+                            />
+                        </div>
+
+                        <div>
+                            <select
+                                className="w-full text-xs text-slate-350 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none"
+                                value={registerEntryFilter}
+                                onChange={(e) => setRegisterEntryFilter(e.target.value)}
+                            >
+                                <option value="all">All Directions (Inward / Outward)</option>
+                                <option value="Inward">📥 Inward</option>
+                                <option value="Outward">📤 Outward</option>
+                                <option value="Internal">🏢 Internal</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <select
+                                className="w-full text-xs text-slate-350 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none"
+                                value={registerTypeFilter}
+                                onChange={(e) => setRegisterTypeFilter(e.target.value)}
+                            >
+                                <option value="all">All Letter Types</option>
+                                <option value="Inward">Inward</option>
+                                <option value="Outward">Outward</option>
+                                <option value="University Circular">University Circular</option>
+                                <option value="Government Order">Government Order</option>
+                                <option value="Institutional Notice">Institutional Notice</option>
+                                <option value="Official Memo">Official Memo</option>
+                                <option value="Faculty Appointment">Faculty Appointment</option>
+                                <option value="HOD Appointment">HOD Appointment</option>
+                                <option value="MOU &amp; Agreement">MOU &amp; Agreement</option>
+                                <option value="General Communication">General Communication</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-slate-400 px-2">
+                            <span>Total Entries: <strong className="text-slate-200">{registers.length}</strong></span>
+                            {registerSearch && (
+                                <button
+                                    onClick={() => {
+                                        setRegisterSearch("");
+                                        setRegisterTypeFilter("all");
+                                        setRegisterEntryFilter("all");
+                                        setRegisterDeptFilter("all");
+                                    }}
+                                    className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                                >
+                                    Reset Filters
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Register Table */}
+                    <div className="bg-slate-950/30 border border-slate-850 rounded-2xl overflow-hidden">
+                        {isLoadingRegister ? (
+                            <div className="p-12 text-center text-xs text-slate-400">Loading official letters register... ⏳</div>
+                        ) : registers.filter(r => {
+                            const q = registerSearch.toLowerCase();
+                            const matchesSearch = !q ||
+                                (r.registerTitle && r.registerTitle.toLowerCase().includes(q)) ||
+                                (r.registerNumber && r.registerNumber.toLowerCase().includes(q)) ||
+                                (r.subject && r.subject.toLowerCase().includes(q)) ||
+                                (r.senderOrRecipient && r.senderOrRecipient.toLowerCase().includes(q)) ||
+                                (r.department && r.department.toLowerCase().includes(q));
+
+                            const matchesType = registerTypeFilter === "all" || r.letterType === registerTypeFilter;
+                            const matchesEntry = registerEntryFilter === "all" || r.entryType === registerEntryFilter;
+                            const matchesDept = registerDeptFilter === "all" || r.department === registerDeptFilter;
+
+                            return matchesSearch && matchesType && matchesEntry && matchesDept;
+                        }).length === 0 ? (
+                            <div className="p-12 text-center text-xs text-slate-500 space-y-2">
+                                <div className="text-3xl">📑</div>
+                                <p className="font-semibold text-slate-400">No register entries found</p>
+                                <p className="text-[11px] text-slate-600">Click "+ New Register" above to record a new inward or outward official document.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-900/80 border-b border-slate-800 text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                                        <tr>
+                                            <th className="p-3.5">Register No &amp; Title</th>
+                                            <th className="p-3.5">Direction / Type</th>
+                                            <th className="p-3.5">Subject</th>
+                                            <th className="p-3.5">Sender / Recipient</th>
+                                            <th className="p-3.5">Dates</th>
+                                            <th className="p-3.5">Department</th>
+                                            <th className="p-3.5 text-center">Attachment</th>
+                                            <th className="p-3.5 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-850">
+                                        {registers.filter(r => {
+                                            const q = registerSearch.toLowerCase();
+                                            const matchesSearch = !q ||
+                                                (r.registerTitle && r.registerTitle.toLowerCase().includes(q)) ||
+                                                (r.registerNumber && r.registerNumber.toLowerCase().includes(q)) ||
+                                                (r.subject && r.subject.toLowerCase().includes(q)) ||
+                                                (r.senderOrRecipient && r.senderOrRecipient.toLowerCase().includes(q)) ||
+                                                (r.department && r.department.toLowerCase().includes(q));
+
+                                            const matchesType = registerTypeFilter === "all" || r.letterType === registerTypeFilter;
+                                            const matchesEntry = registerEntryFilter === "all" || r.entryType === registerEntryFilter;
+                                            const matchesDept = registerDeptFilter === "all" || r.department === registerDeptFilter;
+
+                                            return matchesSearch && matchesType && matchesEntry && matchesDept;
+                                        }).map((reg) => (
+                                            <tr key={reg._id} className="hover:bg-slate-900/40 transition-colors">
+                                                <td className="p-3.5">
+                                                    <span className="font-mono font-bold text-slate-200 block text-[11px]">{reg.registerNumber}</span>
+                                                    <span className="text-[11px] text-slate-350 font-semibold">{reg.registerTitle}</span>
+                                                </td>
+                                                <td className="p-3.5">
+                                                    <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider mb-1 ${
+                                                        reg.entryType === "Inward" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                                        reg.entryType === "Outward" ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20" :
+                                                        "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                                    }`}>
+                                                        {reg.entryType}
+                                                    </span>
+                                                    <p className="text-[10px] text-slate-400">{reg.letterType}</p>
+                                                </td>
+                                                <td className="p-3.5 max-w-xs">
+                                                    <p className="text-slate-200 font-semibold truncate" title={reg.subject}>{reg.subject}</p>
+                                                    {reg.description && (
+                                                        <p className="text-[10px] text-slate-500 truncate mt-0.5">{reg.description}</p>
+                                                    )}
+                                                </td>
+                                                <td className="p-3.5">
+                                                    <p className="font-semibold text-slate-200">{reg.senderOrRecipient}</p>
+                                                </td>
+                                                <td className="p-3.5">
+                                                    <div className="text-[10px] text-slate-400">
+                                                        <span>Letter: {new Date(reg.letterDate).toLocaleDateString()}</span>
+                                                        {reg.receivedOrDispatchDate && (
+                                                            <span className="block text-slate-500">
+                                                                {reg.entryType === "Inward" ? "Received: " : "Dispatch: "}
+                                                                {new Date(reg.receivedOrDispatchDate).toLocaleDateString()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="p-3.5 text-slate-350 text-[11px]">
+                                                    {reg.department || "General"}
+                                                </td>
+                                                <td className="p-3.5 text-center">
+                                                    {reg.attachment ? (
+                                                        <a
+                                                            href={reg.attachment}
+                                                            download={reg.attachmentName || "Register_Attachment"}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded text-[10px] font-semibold inline-flex items-center gap-1"
+                                                            title={reg.attachmentName || "Download Attachment"}
+                                                        >
+                                                            📎 Download
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-slate-600 text-[10px]">None</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                                    <button
+                                                        onClick={() => setViewRegisterModal(reg)}
+                                                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-all"
+                                                        title="View Details"
+                                                    >
+                                                        👁️ View
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenEditRegister(reg)}
+                                                        className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/25 border border-indigo-500/20 text-indigo-300 rounded-lg text-xs font-semibold transition-all"
+                                                        title="Edit Entry"
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteRegister(reg._id)}
+                                                        className="p-1 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 text-rose-400 rounded-lg text-xs transition-all"
+                                                        title="Delete Entry"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* CREATE / EDIT REGISTER MODAL */}
+            {registerModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                                    <span>{editingRegister ? "✏️ Edit Official Register Entry" : "➕ New Official Letters Register"}</span>
+                                </h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    {editingRegister ? `Updating Record: ${editingRegister.registerNumber}` : "Create a new entry in the institutional official letters register"}
+                                </p>
+                            </div>
+                            <button onClick={() => setRegisterModalOpen(false)} className="text-slate-400 hover:text-white text-base">✕</button>
+                        </div>
+
+                        <form onSubmit={handleSaveRegister} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs text-slate-350">
+                            {/* Register Title */}
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Register Title / Name <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    placeholder="e.g. Inward Correspondence Register 2026 / UGC Circular Inward"
+                                    value={registerForm.registerTitle}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, registerTitle: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            {/* Register Number / Ref Number */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Register / Reference Number <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 font-mono focus:outline-none focus:border-indigo-500"
+                                    placeholder="e.g. REG/CE/2026/1042"
+                                    value={registerForm.registerNumber}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, registerNumber: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            {/* Entry Type */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Direction</label>
+                                <select
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    value={registerForm.entryType}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, entryType: e.target.value }))}
+                                >
+                                    <option value="Inward">📥 Inward Letter</option>
+                                    <option value="Outward">📤 Outward Letter</option>
+                                    <option value="Internal">🏢 Internal Departmental</option>
+                                </select>
+                            </div>
+
+                            {/* Letter Type */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Letter Type</label>
+                                <select
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    value={registerForm.letterType}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, letterType: e.target.value }))}
+                                >
+                                    <option value="Inward">Inward</option>
+                                    <option value="Outward">Outward</option>
+                                    <option value="University Circular">University Circular</option>
+                                    <option value="Government Order">Government Order</option>
+                                    <option value="Institutional Notice">Institutional Notice</option>
+                                    <option value="Official Memo">Official Memo</option>
+                                    <option value="Faculty Appointment">Faculty Appointment</option>
+                                    <option value="HOD Appointment">HOD Appointment</option>
+                                    <option value="MOU &amp; Agreement">MOU &amp; Agreement</option>
+                                    <option value="General Communication">General Communication</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            {/* Department */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Department</label>
+                                <input
+                                    type="text"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    placeholder="e.g. Computer Science &amp; Engineering"
+                                    value={registerForm.department}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, department: e.target.value }))}
+                                />
+                            </div>
+
+                            {/* Sender / Recipient */}
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Sender / Recipient <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    placeholder="e.g. Savitribai Phule Pune University (SPPU) / Directorate of Technical Education (DTE)"
+                                    value={registerForm.senderOrRecipient}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, senderOrRecipient: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            {/* Subject */}
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Subject <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    placeholder="Subject or purpose of the letter..."
+                                    value={registerForm.subject}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, subject: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            {/* Letter Date */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Letter Date <span className="text-rose-400">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    value={registerForm.letterDate}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, letterDate: e.target.value }))}
+                                    required
+                                />
+                            </div>
+
+                            {/* Received or Dispatch Date */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    {registerForm.entryType === "Inward" ? "Received Date" : "Dispatch Date"}
+                                </label>
+                                <input
+                                    type="date"
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 focus:outline-none focus:border-indigo-500"
+                                    value={registerForm.receivedOrDispatchDate}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, receivedOrDispatchDate: e.target.value }))}
+                                />
+                            </div>
+
+                            {/* Description / Remarks */}
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Description / Remarks</label>
+                                <textarea
+                                    rows={2}
+                                    className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                    placeholder="Add any administrative notes, references, or action items..."
+                                    value={registerForm.description}
+                                    onChange={(e) => setRegisterForm(prev => ({ ...prev, description: e.target.value }))}
+                                />
+                            </div>
+
+                            {/* Attachment Upload */}
+                            <div className="flex flex-col gap-1 sm:col-span-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                    Document Attachment (PDF, Doc, Image - max 5MB)
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                                        className="text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                                        onChange={handleRegisterFileChange}
+                                    />
+                                    {registerForm.attachmentName && (
+                                        <span className="text-[11px] text-indigo-400 flex items-center gap-1">
+                                            📎 {registerForm.attachmentName}
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterForm(prev => ({ ...prev, attachment: "", attachmentName: "" }))}
+                                                className="text-rose-400 hover:text-rose-300 ml-1"
+                                            >
+                                                ✕
+                                            </button>
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="sm:col-span-2 flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setRegisterModalOpen(false)}
+                                    className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingRegister}
+                                    className="px-5 py-2 text-xs font-semibold text-white bg-indigo-650 hover:bg-indigo-600 rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                                >
+                                    {isSubmittingRegister ? "Saving..." : editingRegister ? "Update Register Entry ✅" : "Save Register Entry 💾"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW REGISTER RECORD MODAL */}
+            {viewRegisterModal && (
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <span className="text-[9px] uppercase font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                    {viewRegisterModal.entryType} Letter Record
+                                </span>
+                                <h3 className="text-sm font-bold text-slate-100 mt-1">{viewRegisterModal.registerTitle}</h3>
+                                <p className="text-[10px] text-slate-400 font-mono mt-0.5">Ref No: {viewRegisterModal.registerNumber}</p>
+                            </div>
+                            <button onClick={() => setViewRegisterModal(null)} className="text-slate-400 hover:text-white text-base">✕</button>
+                        </div>
+
+                        <div className="space-y-3 text-xs">
+                            <div className="grid grid-cols-2 gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Subject</p>
+                                    <p className="text-slate-200 font-semibold">{viewRegisterModal.subject}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Letter Type</p>
+                                    <p className="text-slate-200 font-semibold">{viewRegisterModal.letterType}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Sender / Recipient</p>
+                                    <p className="text-slate-200 font-semibold">{viewRegisterModal.senderOrRecipient}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Department</p>
+                                    <p className="text-slate-200 font-semibold">{viewRegisterModal.department || "General Administration"}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Letter Date</p>
+                                    <p className="text-slate-200">{new Date(viewRegisterModal.letterDate).toLocaleDateString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">
+                                        {viewRegisterModal.entryType === "Inward" ? "Received Date" : "Dispatch Date"}
+                                    </p>
+                                    <p className="text-slate-200">
+                                        {viewRegisterModal.receivedOrDispatchDate ? new Date(viewRegisterModal.receivedOrDispatchDate).toLocaleDateString() : "N/A"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Created By</p>
+                                    <p className="text-slate-200">{viewRegisterModal.createdByName || "Admin"} ({viewRegisterModal.createdByRole || "Staff"})</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold">Recorded On</p>
+                                    <p className="text-slate-200">{new Date(viewRegisterModal.createdAt).toLocaleString()}</p>
+                                </div>
+                            </div>
+
+                            {viewRegisterModal.description && (
+                                <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Description / Remarks</p>
+                                    <p className="text-slate-300 whitespace-pre-line leading-relaxed">{viewRegisterModal.description}</p>
+                                </div>
+                            )}
+
+                            {viewRegisterModal.attachment && (
+                                <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">📎</span>
+                                        <div>
+                                            <p className="text-xs font-semibold text-slate-200">{viewRegisterModal.attachmentName || "Attached Document"}</p>
+                                            <p className="text-[10px] text-slate-500">Official document attachment</p>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href={viewRegisterModal.attachment}
+                                        download={viewRegisterModal.attachmentName || "register_document"}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="px-3 py-1.5 bg-indigo-650 hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold transition-all shadow"
+                                    >
+                                        📥 Download Document
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                            <button
+                                onClick={() => setViewRegisterModal(null)}
+                                className="px-4 py-1.5 text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

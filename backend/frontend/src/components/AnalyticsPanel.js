@@ -15,7 +15,9 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
         aimlFacultyCount: 0,
         csFacultyCount: 0,
         departmentCount: 0,
-        departmentList: ""
+        departmentList: "",
+        totalMyClasses: 0,
+        totalMyStudents: 0
     });
     
     const [recentPapers, setRecentPapers] = useState([]);
@@ -187,6 +189,18 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                 const totalSeminars = workshops.filter(w => (w.workshopType && w.workshopType.toLowerCase().includes("seminar")) || (w.title && w.title.toLowerCase().includes("seminar"))).length;
                 const totalPapers = papers.length;
 
+                let totalMyClasses = 0;
+                let totalMyStudents = 0;
+                if (currentUser.role === "Faculty") {
+                    try {
+                        const classRes = await api.get("/classes/my-classes");
+                        totalMyClasses = classRes.totalClasses || 0;
+                        totalMyStudents = classRes.totalUniqueStudents || 0;
+                    } catch (e) {
+                        console.error("Classes load error:", e);
+                    }
+                }
+
                 setStats({
                     totalSubjects,
                     lecPlanned,
@@ -201,7 +215,9 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                     aimlFacultyCount,
                     csFacultyCount,
                     departmentCount,
-                    departmentList
+                    departmentList,
+                    totalMyClasses,
+                    totalMyStudents
                 });
 
                 // Compile chart data comparing subjects progress
@@ -377,6 +393,69 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                         </>
                     )}
 
+                {/* Faculty Specific: Direct Timetable Schedule Shortcut */}
+                {currentUser.role === "Faculty" && (
+                    <div 
+                        onClick={() => setCurrentTab && setCurrentTab("timetable")}
+                        className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                        title="Click to navigate directly to Timetable"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Academic Timetable</span>
+                            <span className="text-[10px] text-slate-500 group-hover:text-indigo-400 font-medium">Timetable ↗</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-extrabold text-indigo-400 group-hover:text-indigo-300 transition-colors">📅</span>
+                            <span className="text-xs text-slate-300 font-semibold">Weekly Schedule</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 truncate">
+                            Lectures, practicals, tutorials &amp; examinations
+                        </p>
+                    </div>
+                )}
+
+                {/* Faculty Specific: Direct Assignment Marks Evaluation Shortcut */}
+                {currentUser.role === "Faculty" && (
+                    <div 
+                        onClick={() => setCurrentTab && setCurrentTab("assignments")}
+                        className="bg-slate-900/60 border border-slate-800 hover:border-emerald-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                        title="Click to navigate directly to Coursework Assignments & Evaluations"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Continuous Assignments</span>
+                            <span className="text-[10px] text-slate-500 group-hover:text-emerald-400 font-medium">Assignments ↗</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-extrabold text-emerald-400 group-hover:text-emerald-300 transition-colors">📝</span>
+                            <span className="text-xs text-slate-300 font-semibold">5 Assignments /10</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 truncate">
+                            Roll numbers, evaluation dates &amp; Total /50
+                        </p>
+                    </div>
+                )}
+
+                {/* Faculty Specific: Leave Management Shortcut */}
+                {currentUser.role === "Faculty" && (
+                    <div 
+                        onClick={() => setCurrentTab && setCurrentTab("leave")}
+                        className="bg-slate-900/60 border border-slate-800 hover:border-amber-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
+                        title="Click to manage faculty leaves"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Leave Management</span>
+                            <span className="text-[10px] text-slate-500 group-hover:text-amber-400 font-medium">Leaves ↗</span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-extrabold text-amber-400 group-hover:text-amber-300 transition-colors">🏖️</span>
+                            <span className="text-xs text-slate-300 font-semibold">Apply &amp; Edit Leaves</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 truncate">
+                            Casual, duty, medical &amp; earned leave balances
+                        </p>
+                    </div>
+                )}
+
                 {/* Registered Subjects (Green Book) */}
                 <div 
                     onClick={() => setCurrentTab && setCurrentTab("greenbook")}
@@ -411,9 +490,9 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
 
                 {/* Logged Workshops & Seminars */}
                 <div 
-                    onClick={() => setCurrentTab && setCurrentTab("workshops")}
+                    onClick={() => setCurrentTab && setCurrentTab("events")}
                     className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/80 p-5 rounded-2xl shadow-sm cursor-pointer transition-all group"
-                    title="Click to view Workshops & Seminars"
+                    title="Click to view Events"
                 >
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Workshops & Seminars</span>
@@ -421,7 +500,7 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                     </div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-3xl font-extrabold text-slate-100 group-hover:text-indigo-300 transition-colors">{stats.totalWorkshops}</span>
-                        <span className="text-xs text-slate-400">Events Logged</span>
+                        <span className="text-xs text-slate-400">Events</span>
                     </div>
                 </div>
 
@@ -506,28 +585,63 @@ function AnalyticsPanel({ currentUser, setCurrentTab, onSelectDepartment, refres
                     <div className="space-y-2 pt-2 border-t border-slate-850">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Quick Actions</h4>
                         
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                onClick={() => setCurrentTab("workshops")}
-                                className="p-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-center text-[10px] font-bold transition-all text-indigo-300 hover:text-indigo-200 col-span-2 shadow-sm"
-                            >
-                                ➕ Create Event / Seminar
-                            </button>
+                        {currentUser?.role === "Faculty" ? (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("timetable")}
+                                    className="p-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-center text-[10px] font-bold transition-all text-indigo-300 hover:text-indigo-200 col-span-2 shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <span>📅</span> View Timetable Schedule
+                                </button>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("assignments")}
+                                    className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>📝</span> Assignments
+                                </button>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("submissions")}
+                                    className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>📤</span> Submissions
+                                </button>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("certifications")}
+                                    className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>📜</span> Certifications
+                                </button>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("leave")}
+                                    className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-amber-300/80 hover:text-amber-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🏖️</span> Leave Portal
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("events")}
+                                    className="p-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-xl text-center text-[10px] font-bold transition-all text-indigo-300 hover:text-indigo-200 col-span-2 shadow-sm cursor-pointer"
+                                >
+                                    ➕ Create Event / Seminar
+                                </button>
 
-                            <button
-                                onClick={() => setCurrentTab("greenbook")}
-                                className="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white"
-                            >
-                                📖 Green Book
-                            </button>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("greenbook")}
+                                    className="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white cursor-pointer"
+                                >
+                                    📖 Green Book
+                                </button>
 
-                            <button
-                                onClick={() => setCurrentTab("papers")}
-                                className="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white"
-                            >
-                                📝 Publications
-                            </button>
-                        </div>
+                                <button
+                                    onClick={() => setCurrentTab && setCurrentTab("papers")}
+                                    className="p-3 bg-slate-950 hover:bg-slate-900 border border-slate-850 rounded-xl text-center text-[10px] font-bold transition-all text-slate-300 hover:text-white cursor-pointer"
+                                >
+                                    📝 Publications
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                 </div>

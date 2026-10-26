@@ -15,6 +15,23 @@ const workshopSchema = new mongoose.Schema({
     guestEmail: { type: String, default: "" },
     guestDesignation: { type: String, default: "" },
     guestOrganization: { type: String, default: "" },
+    guests: [{
+        name: { type: String, required: true },
+        designation: { type: String, default: "" },
+        organization: { type: String, default: "" },
+        email: { type: String, default: "" },
+        contact: { type: String, default: "" },
+        invitationStatus: { type: String, enum: ["Pending", "Sent", "Accepted", "Declined"], default: "Pending" },
+        invitationSentAt: { type: Date, default: null },
+        thankingStatus: { type: String, enum: ["Pending", "Sent"], default: "Pending" },
+        thankingSentAt: { type: Date, default: null }
+    }],
+    coordinators: [{
+        name: { type: String, default: "" },
+        designation: { type: String, default: "" },
+        email: { type: String, default: "" },
+        phone: { type: String, default: "" }
+    }],
     workshopType: { 
         type: String, 
         default: "Workshop" 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 import DivisionManagementCard from "./DivisionManagementCard";
 
-function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFaculty }) {
+function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFaculty, navKey }) {
     const [subjects, setSubjects] = useState([]);
     const [faculties, setFaculties] = useState([]);
     
@@ -13,6 +13,16 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
     // Detail views states
     const [activeSubject, setActiveSubject] = useState(null);
     const [detailTab, setDetailTab] = useState("lectures"); // lectures, practicals, plan, students
+
+    // Direct navigation reset when clicking sidebar Green Book (Requirement 11)
+    useEffect(() => {
+        if (navKey !== undefined && navKey !== null) {
+            setActiveSubject(null);
+            setSelectedDivision(null);
+            setShowAddForm(false);
+            setShowCsvImporter(false);
+        }
+    }, [navKey]);
     
     // Add subject form toggle and inputs
     const [showAddForm, setShowAddForm] = useState(false);
@@ -702,20 +712,59 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                     {/* Header bar */}
                     <div className="bg-slate-950/40 p-5 border-b border-slate-850 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
-                            <button
-                                onClick={() => {
-                                    if (selectedDivision) {
-                                        setSelectedDivision(null);
-                                    } else {
+                            {/* Requirement 11: Breadcrumbs Navigation */}
+                            <nav className="flex items-center gap-1.5 text-xs mb-2.5 text-slate-400 font-medium flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => {
                                         setActiveSubject(null);
-                                    }
-                                }}
-                                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold mb-2 block"
-                            >
-                                ← {selectedDivision ? "Back to Division Sections" : "Back to Subject List"}
-                            </button>
-                            <h3 className="text-sm font-bold text-slate-200">{activeSubject.subjectName} ({activeSubject.subjectCode})</h3>
-                            <p className="text-[10px] text-slate-500 uppercase font-semibold">Semester: {activeSubject.semester} &bull; Academic Year: {activeSubject.academicYear}</p>
+                                        setSelectedDivision(null);
+                                    }}
+                                    className="hover:text-indigo-300 text-indigo-400 font-semibold cursor-pointer flex items-center gap-1 transition"
+                                >
+                                    <span>📖 Green Book</span>
+                                </button>
+                                <span className="text-slate-600">/</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (selectedDivision) setSelectedDivision(null);
+                                    }}
+                                    className={`${selectedDivision ? "text-indigo-400 hover:text-indigo-300 cursor-pointer font-semibold" : "text-white font-bold cursor-default"}`}
+                                >
+                                    {activeSubject.subjectName} ({activeSubject.subjectCode})
+                                </button>
+                                {selectedDivision && (
+                                    <>
+                                        <span className="text-slate-600">/</span>
+                                        <span className="text-white font-bold">Division {selectedDivision}</span>
+                                    </>
+                                )}
+                                {!activeSubject.hasDivision && (
+                                    <>
+                                        <span className="text-slate-600">/</span>
+                                        <span className="text-indigo-300 uppercase text-[10px] bg-indigo-600/20 px-2 py-0.5 rounded font-bold">
+                                            {detailTab}
+                                        </span>
+                                    </>
+                                )}
+                            </nav>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setActiveSubject(null);
+                                        setSelectedDivision(null);
+                                    }}
+                                    className="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md transition cursor-pointer font-medium"
+                                    title="Return directly to Green Book Main Page"
+                                >
+                                    ← Back to Main Page
+                                </button>
+                                <h3 className="text-sm font-bold text-slate-200">{activeSubject.subjectName} ({activeSubject.subjectCode})</h3>
+                            </div>
+                            <p className="text-[10px] text-slate-500 uppercase font-semibold mt-1">Semester: {activeSubject.semester} &bull; Academic Year: {activeSubject.academicYear}</p>
                         </div>
 
                         {/* Tracker Sub-Tabs */}

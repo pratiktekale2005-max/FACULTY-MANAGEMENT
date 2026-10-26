@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import GreenBookPanel from "../components/GreenBookPanel";
-import WorkshopsPanel from "../components/WorkshopsPanel";
 import ActivitiesPanel from "../components/ActivitiesPanel";
 import PapersPanel from "../components/PapersPanel";
 import ReportGeneratorPanel from "../components/ReportGeneratorPanel";
@@ -22,6 +21,14 @@ import DepartmentFacultyView from "../components/DepartmentFacultyView";
 import FacultyDetailedProfile from "../components/FacultyDetailedProfile";
 import FacultyDirectory from "../components/FacultyDirectory";
 import MyProfileView from "../components/MyProfileView";
+import MyClassesPanel from "../components/MyClassesPanel";
+import TimetablePanel from "../components/TimetablePanel";
+import AttendancePanel from "../components/AttendancePanel";
+import FacultySubjectsPanel from "../components/FacultySubjectsPanel";
+import LeaveManagementPanel from "../components/LeaveManagementPanel";
+import NoticesPanel from "../components/NoticesPanel";
+import EventsPanel from "../components/EventsPanel";
+import SubmissionsPanel from "../components/SubmissionsPanel";
 import { api } from "../services/api";
 
 function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propToggleTheme }) {
@@ -38,6 +45,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     
     // Core data triggers for children components
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [greenBookNavKey, setGreenBookNavKey] = useState(0);
 
     const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
@@ -173,18 +181,27 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
         }
         switch (currentTab) {
             case "overview": return "Dashboard";
+            case "my-classes": return "My Assigned Classes";
+            case "students": return "Student Details";
+            case "timetable": return "Faculty Weekly Timetable";
+            case "attendance": return "Attendance Management";
+            case "assignment-marks": 
+            case "assignments": return "Coursework Assignments & Assessments";
+            case "subjects": return "Assigned Subjects";
+            case "events": 
+            case "workshops": return "Academic Events & Workshops";
+            case "greenbook": return "Green Book (Academic Tracker)";
+            case "leave": return "Leave Management";
+            case "notices": return "Notices & Announcements";
+            case "profile": return "Faculty Profile";
             case "faculty": return "Faculty Directory & Portfolios";
             case "faculty-performance": return "Faculty Performance Scorecard";
             case "tasks": return "Assign & Track Tasks";
-            case "greenbook": return "Green Book (Academic Tracker)";
-            case "workshops": return currentUser.role === "HOD" ? "Workshop Approvals Queue" : "Workshops & Seminars";
             case "approvals": return currentUser.role === "Principal" || currentUser.role === "HOD" ? "Approvals Center Queue" : "My Submission Approvals";
             case "activities": return "Other Activities Portfolio";
             case "papers": return "Research Papers & Publications";
             case "kpis": return "KPI Goals & Targets Tracker";
             case "reports": return "Academic Profile Report Generator";
-            case "profile": return "My Academic Profile";
-            case "students": return "Student Details";
             case "feedback": return "Student Course Evaluations";
             case "invitations": return currentUser.role === "HOD" ? "Department Appointment Letters" : "Official Letters & Templates";
             case "users": return "Designation Assignment";
@@ -193,7 +210,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
             case "faculty-mgmt": return "All Faculty";
             case "hod-mgmt": return "Department Leadership (HODs)";
             case "certifications": return "My Certifications Portfolio";
-            case "assignments": return "Subject Assignments Management";
+            case "submissions": return "My Submissions";
             default: return "Dashboard";
         }
     };
@@ -203,6 +220,9 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
         return (
             <button
                 onClick={() => { 
+                    if (tab === "greenbook") {
+                        setGreenBookNavKey(k => k + 1);
+                    }
                     setCurrentTab(tab); 
                     setSelectedDepartment(null);
                     setSelectedFacultyProfile(null);
@@ -308,7 +328,8 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                 <div>
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Academic Activities</p>}
                                     <div className="space-y-1">
-                                        {renderNavButton("workshops", "🎤", "Workshops")}
+                                        {renderNavButton("events", "🎯", "Events")}
+                                        {renderNavButton("greenbook", "📖", "Green Book")}
                                         {renderNavButton("papers", "📝", "Research")}
                                         {renderNavButton("activities", "🎯", "Faculty Activities")}
                                     </div>
@@ -329,6 +350,24 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                     </div>
                                 </div>
                             </>
+                        ) : currentUser.role === "Faculty" ? (
+                            <div className="space-y-1">
+                                {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Faculty Portal</p>}
+                                {renderNavButton("overview", "📊", "Dashboard")}
+                                {renderNavButton("students", "👥", "Student Details")}
+                                {renderNavButton("timetable", "📅", "Timetable")}
+                                {renderNavButton("attendance", "✅", "Attendance")}
+                                {renderNavButton("assignments", "📝", "Assignments")}
+                                {renderNavButton("tasks", "📋", "Assigned Tasks")}
+                                {renderNavButton("events", "🎯", "Events")}
+                                {renderNavButton("greenbook", "📖", "Green Book")}
+                                {renderNavButton("certifications", "📜", "Certifications")}
+                                {renderNavButton("papers", "📚", "Research Papers")}
+                                {renderNavButton("reports", "📄", "Report Generator")}
+                                {renderNavButton("submissions", "📤", "My Submissions")}
+                                {renderNavButton("activities", "🎖️", "Other Activities")}
+                                {renderNavButton("profile", "👤", "My Profile")}
+                            </div>
                         ) : (
                             <>
                                 <div>
@@ -341,13 +380,13 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                 <div>
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Academic Control</p>}
                                     <div className="space-y-1">
-                                        {currentUser.role === "Principal" && renderNavButton("faculty", "👥", "Faculty Directory")}
+                                        {renderNavButton("faculty", "👥", "Faculty Directory")}
                                         {renderNavButton("greenbook", "📖", "Green Book Tracker")}
                                         {renderNavButton("workshops", "🎤", "Workshops & Seminars")}
-                                        {renderNavButton("approvals", "🔔", currentUser.role === "Principal" ? "Approvals Queue" : "My Submissions")}
-                                        {currentUser.role === "Faculty" && renderNavButton("activities", "🎯", "Other Activities")}
+                                        {renderNavButton("approvals", "🔔", "Approvals Queue")}
+                                        {renderNavButton("tasks", "📋", "Tasks")}
                                         {renderNavButton("students", "👥", "Student Details")}
-                                        {currentUser.role !== "Faculty" && renderNavButton("invitations", "✉️", "Official Letters")}
+                                        {renderNavButton("invitations", "✉️", "Official Letters")}
                                     </div>
                                 </div>
 
@@ -355,24 +394,20 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                     {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Profile & Publications</p>}
                                     <div className="space-y-1">
                                         {renderNavButton("papers", "📝", "Research Papers")}
-                                        {currentUser.role === "Faculty" && renderNavButton("certifications", "🏅", "Certifications")}
-                                        {currentUser.role === "Faculty" && renderNavButton("assignments", "📚", "Assignments")}
                                         {renderNavButton("reports", "📄", "Report Generator")}
                                         {renderNavButton("profile", "👤", "My Profile")}
                                     </div>
                                 </div>
 
-                                {currentUser.role === "Principal" && (
-                                    <div>
-                                        {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Administration</p>}
-                                        <div className="space-y-1">
-                                            {renderNavButton("departments", "🏢", "Departments")}
-                                            {renderNavButton("faculty-mgmt", "👥", "All Faculty")}
-                                            {renderNavButton("users", "🎖️", "Designation Assignment")}
-                                            {renderNavButton("settings", "⚙️", "College Settings")}
-                                        </div>
+                                <div>
+                                    {!isSidebarCollapsed && <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Administration</p>}
+                                    <div className="space-y-1">
+                                        {renderNavButton("departments", "🏢", "Departments")}
+                                        {renderNavButton("faculty-mgmt", "👥", "All Faculty")}
+                                        {renderNavButton("users", "🎖️", "Designation Assignment")}
+                                        {renderNavButton("settings", "⚙️", "College Settings")}
                                     </div>
-                                )}
+                                </div>
                             </>
                         )}
                     </nav>
@@ -558,7 +593,11 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* OVERVIEW DASHBOARD VIEW */}
                             {currentTab === "overview" && (
                                 currentUser.role === "HOD" ? (
-                                    <HODDashboard currentUser={currentUser} onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)} />
+                                    <HODDashboard 
+                                        currentUser={currentUser} 
+                                        setCurrentTab={setCurrentTab} 
+                                        onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)} 
+                                    />
                                 ) : selectedDepartment ? (
                                     <DepartmentFacultyView 
                                         departmentCode={selectedDepartment.code} 
@@ -572,12 +611,63 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                         currentUser={currentUser} 
                                         setCurrentTab={setCurrentTab} 
                                         onSelectDepartment={(code, name) => {
-                                            setSelectedDepartment({ code, name });
-                                            setSelectedFacultyProfile(null);
+                                             setSelectedDepartment({ code, name });
+                                             setSelectedFacultyProfile(null);
                                         }}
                                         refreshTrigger={refreshTrigger}
                                     />
                                 )
+                            )}
+
+                            {/* MY CLASSES VIEW */}
+                            {currentTab === "my-classes" && (
+                                <MyClassesPanel 
+                                    currentUser={currentUser} 
+                                    onNavigate={(tab) => setCurrentTab(tab)} 
+                                />
+                            )}
+
+                            {/* TIMETABLE VIEW */}
+                            {currentTab === "timetable" && (
+                                <TimetablePanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* ATTENDANCE MANAGEMENT VIEW */}
+                            {currentTab === "attendance" && (
+                                <AttendancePanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* ASSIGNMENTS & MARKS VIEW */}
+                            {(currentTab === "assignments" || currentTab === "assignment-marks") && (
+                                <AssignmentsPanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* FACULTY ASSIGNED SUBJECTS VIEW */}
+                            {currentTab === "subjects" && (
+                                <FacultySubjectsPanel 
+                                    currentUser={currentUser} 
+                                    onNavigate={(tab) => setCurrentTab(tab)} 
+                                />
+                            )}
+
+                            {/* LEAVE MANAGEMENT VIEW */}
+                            {currentTab === "leave" && (
+                                <LeaveManagementPanel 
+                                    currentUser={currentUser} 
+                                />
+                            )}
+
+                            {/* NOTICES & ANNOUNCEMENTS VIEW */}
+                            {currentTab === "notices" && (
+                                <NoticesPanel 
+                                    currentUser={currentUser} 
+                                />
                             )}
 
                             {/* FACULTY DIRECTORY VIEW */}
@@ -594,19 +684,17 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {currentTab === "greenbook" && (
                                 <GreenBookPanel 
                                     currentUser={currentUser} 
+                                    navKey={greenBookNavKey}
                                     refreshTrigger={refreshTrigger} 
                                     onRefresh={triggerRefresh}
                                     onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
                                 />
                             )}
 
-                            {/* WORKSHOPS VIEW */}
-                            {currentTab === "workshops" && (
-                                <WorkshopsPanel 
+                            {/* EVENTS VIEW */}
+                            {(currentTab === "events" || currentTab === "workshops") && (
+                                <EventsPanel 
                                     currentUser={currentUser} 
-                                    refreshTrigger={refreshTrigger} 
-                                    onRefresh={triggerRefresh}
-                                    onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
                                 />
                             )}
 
@@ -742,15 +830,15 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             )}
 
                             {/* CERTIFICATIONS PORTFOLIO VIEW */}
-                            {currentTab === "certifications" && currentUser.role === "Faculty" && (
+                            {currentTab === "certifications" && (
                                 <CertificationsPanel 
                                     currentUser={currentUser} 
                                 />
                             )}
 
-                            {/* SUBJECT ASSIGNMENTS VIEW */}
-                            {currentTab === "assignments" && currentUser.role === "Faculty" && (
-                                <AssignmentsPanel 
+                            {/* MY SUBMISSIONS VIEW */}
+                            {currentTab === "submissions" && (
+                                <SubmissionsPanel 
                                     currentUser={currentUser} 
                                 />
                             )}

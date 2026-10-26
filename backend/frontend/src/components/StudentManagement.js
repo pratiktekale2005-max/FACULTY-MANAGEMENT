@@ -16,11 +16,13 @@ function StudentManagement({ currentUser, onRefresh }) {
     const [newStudent, setNewStudent] = useState({ 
         rollNo: "", 
         name: "", 
+        email: "",
+        mobileNumber: "", 
+        prnNumber: "",
+        address: "",
         gender: "Male",
         year: "SE",
         division: "A",
-        mobileNumber: "", 
-        prnNumber: "",
         subjectId: ""
     });
 
@@ -167,11 +169,13 @@ function StudentManagement({ currentUser, onRefresh }) {
                 studentsList: [{
                     rollNo: newStudent.rollNo,
                     name: newStudent.name,
+                    email: newStudent.email || `${newStudent.rollNo.toLowerCase()}@dypcoei.edu.in`,
+                    mobileNumber: newStudent.mobileNumber,
+                    prnNumber: newStudent.prnNumber,
+                    address: newStudent.address || "Pune, Maharashtra",
                     gender: newStudent.gender,
                     year: newStudent.year,
-                    division: newStudent.division,
-                    mobileNumber: newStudent.mobileNumber,
-                    prnNumber: newStudent.prnNumber
+                    division: newStudent.division
                 }] 
             });
 
@@ -180,8 +184,10 @@ function StudentManagement({ currentUser, onRefresh }) {
                 ...prev, 
                 rollNo: "", 
                 name: "", 
+                email: "",
                 mobileNumber: "", 
-                prnNumber: "" 
+                prnNumber: "",
+                address: ""
             }));
             loadDepartmentData();
             if (onRefresh) onRefresh();
@@ -194,6 +200,7 @@ function StudentManagement({ currentUser, onRefresh }) {
     };
 
     // Edit attributes
+    // eslint-disable-next-line no-unused-vars
     const handleOpenEditModal = (std) => {
         setSelectedStudent(std);
         setStudentAttr({
@@ -258,9 +265,9 @@ function StudentManagement({ currentUser, onRefresh }) {
     // Export CSV
     const exportCSV = () => {
         if (filteredStudents.length === 0) return;
-        let content = "Student Name,Roll No,Department,Year,Division,Gender,Added By,Mobile Number,PRN Number,Skills\n";
+        let content = "Roll No,PRN No,Name,Email,Phone No,Address,Department,Year of Study,Division,Gender\n";
         filteredStudents.forEach(s => {
-            content += `"${s.name}","${s.rollNo}","${s.department}","${s.year}","${s.division}","${s.gender}","${s.addedBy}","${s.mobileNumber || ""}","${s.prnNumber || ""}","${s.skills || ""}"\n`;
+            content += `"${s.rollNo || ""}","${s.prnNumber || ""}","${s.name || ""}","${s.email || ""}","${s.mobileNumber || ""}","${(s.address || "").replace(/"/g, '""')}","${s.department || currentUser.department || ""}","${s.year || ""}","${s.division || ""}","${s.gender || "Male"}"\n`;
         });
 
         const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
@@ -401,79 +408,72 @@ function StudentManagement({ currentUser, onRefresh }) {
                         </span>
                     </div>
 
-                    {/* Table of Students (Section 5: Name | Roll No. | Department | Year | Division | Gender | Added By) */}
-                    <div className="overflow-x-auto border border-slate-850 rounded-2xl bg-slate-950/20">
+                    {/* Table of Students (Exact 10 columns per Requirement 6: Roll No. | PRN No. | Name | Email | Phone No. | Address | Department | Year of Study | Division | Gender) */}
+                    <div className="overflow-x-auto border border-slate-850 rounded-2xl bg-slate-950/20 shadow-inner">
                         <table className="w-full text-left border-collapse text-xs">
                             <thead>
-                                <tr className="border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-900/60">
-                                    <th className="py-3 px-3">Student Name</th>
-                                    <th className="py-3 px-3">Roll No.</th>
-                                    <th className="py-3 px-3">Department</th>
-                                    <th className="py-3 px-2">Year</th>
-                                    <th className="py-3 px-2">Division</th>
-                                    <th className="py-3 px-2">Gender</th>
-                                    <th className="py-3 px-3">Added By</th>
-                                    <th className="py-3 px-3 text-right">Actions</th>
+                                <tr className="border-b border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-900/80">
+                                    <th className="py-3 px-3 whitespace-nowrap">Roll No.</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">PRN No.</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Name</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Email</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Phone No.</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Address</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Department</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Year of Study</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Division</th>
+                                    <th className="py-3 px-3 whitespace-nowrap">Gender</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-850/50 text-slate-300">
                                 {loading && filteredStudents.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-10 text-center text-slate-400 italic">
+                                        <td colSpan={10} className="py-10 text-center text-slate-400 italic">
                                             Loading student details... ⏳
                                         </td>
                                     </tr>
                                 ) : filteredStudents.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-10 text-center text-slate-500 italic space-y-1">
+                                        <td colSpan={10} className="py-10 text-center text-slate-500 italic space-y-1">
                                             <p className="text-sm font-semibold text-slate-400">No student records found</p>
                                             <p className="text-[11px] text-slate-600">Students added by Faculty or HOD in this department will appear here automatically.</p>
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredStudents.map(s => {
-                                        const isHOD = s.addedByRole === "HOD" || (s.addedBy && s.addedBy.includes("HOD"));
                                         return (
                                             <tr key={s._id || s.prnNumber} className="hover:bg-slate-900/40 transition-colors">
-                                                <td className="py-3 px-3">
-                                                    <p className="font-bold text-slate-100">{s.name}</p>
-                                                    {s.prnNumber && (
-                                                        <span className="text-[10px] text-slate-500 font-mono">PRN: {s.prnNumber}</span>
-                                                    )}
-                                                </td>
-                                                <td className="py-3 px-3 font-semibold text-indigo-300 font-mono">
+                                                <td className="py-3 px-3 font-semibold text-indigo-300 font-mono whitespace-nowrap">
                                                     {s.rollNo}
                                                 </td>
-                                                <td className="py-3 px-3 text-slate-300 text-[11px]">
+                                                <td className="py-3 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
+                                                    {s.prnNumber || "-"}
+                                                </td>
+                                                <td className="py-3 px-3 font-bold text-slate-100 whitespace-nowrap">
+                                                    {s.name}
+                                                </td>
+                                                <td className="py-3 px-3 text-slate-300 font-mono text-[11px] whitespace-nowrap">
+                                                    {s.email || "-"}
+                                                </td>
+                                                <td className="py-3 px-3 text-slate-300 font-mono text-[11px] whitespace-nowrap">
+                                                    {s.mobileNumber || "-"}
+                                                </td>
+                                                <td className="py-3 px-3 text-slate-400 text-[11px] max-w-xs truncate" title={s.address}>
+                                                    {s.address || "-"}
+                                                </td>
+                                                <td className="py-3 px-3 text-slate-300 text-[11px] whitespace-nowrap">
                                                     {s.department || currentUser.department || "Academic Dept"}
                                                 </td>
-                                                <td className="py-3 px-2 font-medium text-slate-300 text-[11px]">
+                                                <td className="py-3 px-3 font-medium text-slate-300 text-[11px] whitespace-nowrap">
                                                     {s.year || "SE"}
                                                 </td>
-                                                <td className="py-3 px-2 font-bold text-slate-200">
+                                                <td className="py-3 px-3 font-bold text-slate-200 whitespace-nowrap">
                                                     <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px]">
                                                         {s.division || "-"}
                                                     </span>
                                                 </td>
-                                                <td className="py-3 px-2 text-slate-400 text-[11px]">
+                                                <td className="py-3 px-3 text-slate-400 text-[11px] whitespace-nowrap">
                                                     {s.gender || "Male"}
-                                                </td>
-                                                <td className="py-3 px-3">
-                                                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
-                                                        isHOD
-                                                            ? "bg-purple-500/10 text-purple-300 border border-purple-500/20"
-                                                            : "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20"
-                                                    }`}>
-                                                        {s.addedBy || "Faculty"}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 px-3 text-right">
-                                                    <button
-                                                        onClick={() => handleOpenEditModal(s)}
-                                                        className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-500/10 hover:bg-indigo-500/20 px-2.5 py-1 rounded-lg border border-indigo-500/20"
-                                                    >
-                                                        Configure
-                                                    </button>
                                                 </td>
                                             </tr>
                                         );
@@ -593,6 +593,28 @@ function StudentManagement({ currentUser, onRefresh }) {
                                 value={newStudent.mobileNumber}
                                 onChange={(e) => setNewStudent(prev => ({ ...prev, mobileNumber: e.target.value }))}
                                 required
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase">Email Address</label>
+                            <input
+                                type="email"
+                                className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 font-mono"
+                                placeholder="student@dypcoei.edu.in"
+                                value={newStudent.email}
+                                onChange={(e) => setNewStudent(prev => ({ ...prev, email: e.target.value }))}
+                            />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <label className="text-[9px] font-bold text-slate-500 uppercase">Residential Address</label>
+                            <input
+                                type="text"
+                                className="w-full text-xs text-slate-200 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                placeholder="e.g. Nigdi, Pune"
+                                value={newStudent.address}
+                                onChange={(e) => setNewStudent(prev => ({ ...prev, address: e.target.value }))}
                             />
                         </div>
 

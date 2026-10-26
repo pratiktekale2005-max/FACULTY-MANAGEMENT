@@ -4,9 +4,15 @@ const Approval = require("../models/Approval");
 const Workshop = require("../models/Workshop");
 const Paper = require("../models/Paper");
 const Activity = require("../models/Activity");
+const Leave = require("../models/Leave");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const { authenticateUser, requireRole } = require("./authMiddleware");
+const {
+    sendApprovalDecisionToFaculty,
+    sendLeaveForwardedToPrincipal,
+    sendPrincipalDecisionToHOD
+} = require("../services/emailService");
 
 // Helper to populate target entities
 async function populateEntityDetails(approvals) {
@@ -20,6 +26,8 @@ async function populateEntityDetails(approvals) {
                 details = await Paper.findById(app.entityId);
             } else if (app.entityType === "ACTIVITY") {
                 details = await Activity.findById(app.entityId);
+            } else if (app.entityType === "LEAVE") {
+                details = await Leave.findById(app.entityId);
             }
         } catch (e) {
             console.error("Failed to populate approval details:", e);
@@ -36,10 +44,22 @@ router.get("/", authenticateUser, async (req, res) => {
     try {
         let query = { organizationId: req.user.organizationId };
         if (req.user.role === "Principal") {
-            // Principal sees everything
+            // Principal sees everything across the institution
         } else if (req.user.role === "HOD") {
             // HOD sees department level approvals
-            query.departmentId = req.user.departmentId;
+            const hodDept = req.user.department;
+            const hodDeptId = req.user.departmentId;
+            const conditions = [];
+            if (hodDeptId) conditions.push({ departmentId: hodDeptId });
+            if (hodDept) conditions.push({ departmentName: hodDept });
+
+            const deptUsers = await User.find({ organizationId: req.user.organizationId, department: hodDept }).select("_id").lean();
+            if (deptUsers.length > 0) {
+                conditions.push({ submittedBy: { $in: deptUsers.map(u => u._id) } });
+            }
+            if (conditions.length > 0) {
+                query.$or = conditions;
+            }
         } else {
             // Faculty sees own approvals
             query.submittedBy = req.user._id;
@@ -82,13 +102,19 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
         }
 
         // Check HOD access constraints
-        if (req.user.role === "HOD" && String(approval.departmentId) !== String(req.user.departmentId)) {
-            return res.status(403).json({ error: "Forbidden: You cannot review other departments' approvals ❌" });
+        // Prevent already-finalized requests from being approved or rejected again (Requirement 6)
+        if (approval.currentLevel === "COMPLETED" || ["APPROVED", "REJECTED"].includes(approval.status)) {
+            return res.status(400).json({ error: "This request has already been finalized and cannot be reviewed again ❌" });
         }
 
-        // Restrict Principal from Workshop Approvals (Requirement #1)
-        if (req.user.role === "Principal" && approval.entityType === "WORKSHOP") {
-            return res.status(403).json({ error: "Access Denied: Principal does not have workshop approval authorization ❌" });
+        if (req.user.role === "HOD") {
+            const submitter = await User.findById(approval.submittedBy);
+            const deptMatch = (approval.departmentId && String(approval.departmentId) === String(req.user.departmentId)) ||
+                              (approval.departmentName && req.user.department && approval.departmentName.toLowerCase() === req.user.department.toLowerCase()) ||
+                              (submitter && submitter.department && req.user.department && submitter.department.toLowerCase() === req.user.department.toLowerCase());
+            if (!deptMatch) {
+                return res.status(403).json({ error: "Forbidden: You cannot review other departments' approvals ❌" });
+            }
         }
 
         const prevStatus = approval.status;
@@ -192,6 +218,26 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
             await Paper.findByIdAndUpdate(approval.entityId, { status: mappedStatus });
         } else if (approval.entityType === "ACTIVITY") {
             await Activity.findByIdAndUpdate(approval.entityId, { status: mappedStatus });
+        } else if (approval.entityType === "LEAVE") {
+            const leaveUpdate = {
+                status: nextStatus === "APPROVED" ? "APPROVED" : nextStatus === "REJECTED" ? "REJECTED" : nextStatus === "RETURNED" ? "REJECTED" : "HOD_APPROVED",
+                currentLevel: nextLevel,
+                updatedAt: new Date()
+            };
+            if (req.user.role === "HOD") {
+                leaveUpdate.hodStatus = action === "approve" ? "APPROVED" : "REJECTED";
+                leaveUpdate.hodRemarks = comment || (action === "approve" ? "Recommended by HOD" : "Rejected by HOD");
+                leaveUpdate.hodActionBy = req.user._id;
+                leaveUpdate.hodActionByName = req.user.name;
+                if (action === "approve") leaveUpdate.hodApprovedAt = new Date();
+            } else if (req.user.role === "Principal") {
+                leaveUpdate.principalStatus = action === "approve" ? "APPROVED" : "REJECTED";
+                leaveUpdate.principalRemarks = comment || (action === "approve" ? "Approved by Principal" : "Rejected by Principal");
+                leaveUpdate.principalActionBy = req.user._id;
+                leaveUpdate.principalActionByName = req.user.name;
+                if (action === "approve") leaveUpdate.principalApprovedAt = new Date();
+            }
+            await Leave.findByIdAndUpdate(approval.entityId, leaveUpdate);
         }
 
         // Audit Logging
@@ -233,6 +279,112 @@ router.post("/:id/transition", requireRole(["Principal", "HOD"]), async (req, re
                     message: `Principal ${req.user.name} decided "${nextStatus.replace(/_/g, ' ')}" on ${approval.entityType.toLowerCase()} submission by ${approval.submittedByName || "Faculty"}.`,
                     type: "approval"
                 });
+            }
+
+            // 4. Dispatch Decision Emails (Requirements 4, 5, 6)
+            try {
+                const submitter = await User.findById(approval.submittedBy);
+                const refNo = `APP-${approval._id.toString().slice(-6).toUpperCase()}`;
+
+                if (req.user.role === "HOD") {
+                    if (action === "approve") {
+                        if (nextStatus === "HOD_APPROVED") {
+                            // Forwarded to Principal - email Principal
+                            const principalUser = await User.findOne({ role: "Principal" });
+                            if (principalUser && principalUser.email) {
+                                sendLeaveForwardedToPrincipal({
+                                    principalEmail: principalUser.email,
+                                    principalName: principalUser.name,
+                                    facultyName: submitter?.name || "Faculty Member",
+                                    department: submitter?.department || approval.departmentName || "",
+                                    leaveType: `${approval.entityType} Request`,
+                                    subject: `${approval.entityType} Approval Request`,
+                                    hodName: req.user.name,
+                                    hodRemarks: comment || "Recommended by HOD"
+                                }).catch(e => console.error("Async forwarded email to Principal error:", e));
+                            }
+
+                            // Email Faculty (Endorsed by HOD, pending Principal)
+                            if (submitter && submitter.email) {
+                                sendApprovalDecisionToFaculty({
+                                    facultyEmail: submitter.email,
+                                    facultyName: submitter.name,
+                                    requestType: approval.entityType,
+                                    refNo,
+                                    status: "HOD_APPROVED",
+                                    approverName: req.user.name,
+                                    approverRole: "HOD",
+                                    remarks: comment || "Recommended for Principal approval"
+                                }).catch(e => console.error("Async decision email to faculty error:", e));
+                            }
+                        } else {
+                            // Finally Approved at HOD Level
+                            if (submitter && submitter.email) {
+                                sendApprovalDecisionToFaculty({
+                                    facultyEmail: submitter.email,
+                                    facultyName: submitter.name,
+                                    requestType: approval.entityType,
+                                    refNo,
+                                    status: "APPROVED",
+                                    approverName: req.user.name,
+                                    approverRole: "HOD",
+                                    remarks: comment || "Approved by HOD"
+                                }).catch(e => console.error("Async approval email to faculty error:", e));
+                            }
+                        }
+                    } else {
+                        // HOD Rejected or Returned
+                        if (submitter && submitter.email) {
+                            sendApprovalDecisionToFaculty({
+                                facultyEmail: submitter.email,
+                                facultyName: submitter.name,
+                                requestType: approval.entityType,
+                                refNo,
+                                status: nextStatus,
+                                approverName: req.user.name,
+                                approverRole: "HOD",
+                                remarks: comment || `${action.toUpperCase()} by HOD`
+                            }).catch(e => console.error("Async reject email to faculty error:", e));
+                        }
+                    }
+                } else if (req.user.role === "Principal") {
+                    // Principal Approved or Rejected
+                    if (submitter && submitter.email) {
+                        sendApprovalDecisionToFaculty({
+                            facultyEmail: submitter.email,
+                            facultyName: submitter.name,
+                            requestType: approval.entityType,
+                            refNo,
+                            status: nextStatus,
+                            approverName: req.user.name,
+                            approverRole: "Principal",
+                            remarks: comment || (action === "approve" ? "Sanctioned by Principal" : `${action.toUpperCase()} by Principal`)
+                        }).catch(e => console.error("Async decision email to faculty error:", e));
+                    }
+
+                    // Intimate HOD
+                    const hodUser = await User.findOne({
+                        role: "HOD",
+                        $or: [
+                            { department: submitter?.department },
+                            { departmentId: approval.departmentId }
+                        ]
+                    });
+                    if (hodUser && hodUser.email) {
+                        sendPrincipalDecisionToHOD({
+                            hodEmail: hodUser.email,
+                            hodName: hodUser.name,
+                            facultyName: submitter?.name || "Faculty Member",
+                            requestType: approval.entityType,
+                            status: nextStatus,
+                            principalName: req.user.name,
+                            remarks: comment || "",
+                            refNo
+                        }).catch(e => console.error("Async HOD decision intimation error:", e));
+                    }
+                }
+            } catch (emailDispatchErr) {
+                console.error("Failed to dispatch approval decision emails:", emailDispatchErr);
             }
         } catch (notifErr) {
             console.error("Failed to dispatch real-time approval notifications:", notifErr);

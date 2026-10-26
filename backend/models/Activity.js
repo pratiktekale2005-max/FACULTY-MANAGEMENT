@@ -6,7 +6,21 @@ const activitySchema = new mongoose.Schema({
     activityName: { type: String, required: true },
     date: { type: String, required: true },
     description: { type: String, required: true },
-    category: { type: String, enum: ["Academic", "Technical", "Cultural"], default: "Academic" },
+    category: { 
+        type: String, 
+        enum: [
+            "Academic", "Technical", "Cultural", "Co-curricular", 
+            "Extracurricular", "Administrative", "Professional", 
+            "Community Outreach", "Workshop / Seminar", "Other"
+        ], 
+        default: "Academic" 
+    },
+    startDate: { type: String, default: "" },
+    endDate: { type: String, default: "" },
+    organizer: { type: String, default: "" },
+    facultyRole: { type: String, default: "Coordinator" },
+    academicYear: { type: String, default: "2026-2027" },
+    participationDetails: { type: String, default: "" },
     documentPath: { type: String, default: "" },
     status: { type: String, enum: ["pending", "verified", "rejected", "returned"], default: "pending" },
     createdAt: { type: Date, default: Date.now }

@@ -39,9 +39,34 @@ router.get("/", authenticateUser, async (req, res) => {
             query.submittedBy = req.user._id;
         }
 
+        // Additional query filters
+        if (req.query.indexing && req.query.indexing !== "ALL" && req.query.indexing !== "All") {
+            query.indexing = req.query.indexing;
+        }
+        if (req.query.publicationStatus && req.query.publicationStatus !== "ALL" && req.query.publicationStatus !== "All") {
+            query.publicationStatus = req.query.publicationStatus;
+        }
+        if (req.query.search) {
+            const sRegex = new RegExp(req.query.search, "i");
+            query.$or = [
+                { title: sRegex },
+                { journal: sRegex },
+                { authors: sRegex },
+                { coAuthors: sRegex },
+                { researchArea: sRegex },
+                { doi: sRegex },
+                { issnIsbn: sRegex }
+            ];
+        }
+
+        let sort = { createdAt: -1 };
+        if (req.query.sortBy === "dateAsc") sort = { date: 1, createdAt: 1 };
+        else if (req.query.sortBy === "dateDesc") sort = { date: -1, createdAt: -1 };
+        else if (req.query.sortBy === "title") sort = { title: 1 };
+
         const papers = await Paper.find(query)
             .populate("submittedBy", "name email department designation")
-            .sort({ createdAt: -1 });
+            .sort(sort);
 
         res.json({ papers });
     } catch (err) {

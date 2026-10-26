@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { authenticateUser, requireRole } = require("./authMiddleware");
 const OfficialLetter = require("../models/OfficialLetter");
+const LetterRegister = require("../models/LetterRegister");
 const Workshop = require("../models/Workshop");
 const User = require("../models/User");
 const {
@@ -75,9 +76,10 @@ router.get("/", authenticateUser, async (req, res) => {
         const { role, _id: userId, department } = req.user;
         let query = {};
 
-        // Role-based visibility (Faculty access restricted per Requirement #5)
+        // Role-based visibility
         if (role === "Faculty") {
-            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot access official letters ❌" });
+            // Faculty can view official guest communications they created
+            query["sender.userId"] = userId;
         }
 
         if (role === "Principal" || role === "Admin") {
@@ -109,10 +111,11 @@ router.get("/", authenticateUser, async (req, res) => {
 router.post("/preview-pdf", authenticateUser, async (req, res) => {
     try {
         const user = req.user;
-        if (user.role === "Faculty") {
-            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot preview official letters ❌" });
-        }
         const letterData = req.body;
+        // Faculty can preview guest communications (invitation, thanking, official_comm)
+        if (user.role === "Faculty" && ["faculty_appointment", "hod_appointment"].includes(letterData.letterType)) {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot preview appointment letters ❌" });
+        }
 
         // Strictly bind sender details to authenticated user (Prevent impersonation - Section 12)
         const sender = {
@@ -147,9 +150,6 @@ router.post("/preview-pdf", authenticateUser, async (req, res) => {
 router.post("/generate", authenticateUser, async (req, res) => {
     try {
         const user = req.user;
-        if (user.role === "Faculty") {
-            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot generate official letters ❌" });
-        }
         const {
             letterType = "invitation",
             subject = "",
@@ -159,6 +159,11 @@ router.post("/generate", authenticateUser, async (req, res) => {
             workshopId = null,
             signatoryType = "single"
         } = req.body;
+
+        // Faculty can generate guest communications (invitation, thanking, official_comm)
+        if (user.role === "Faculty" && ["faculty_appointment", "hod_appointment"].includes(letterType)) {
+            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot generate appointment letters ❌" });
+        }
 
         if (!recipient.name || !recipient.name.trim()) {
             return res.status(400).json({ error: "Recipient name is required ❌" });
@@ -244,14 +249,12 @@ router.post("/:id/send", authenticateUser, async (req, res) => {
 
         // Verify permissions
         const user = req.user;
-        if (user.role === "Faculty") {
-            return res.status(403).json({ error: "Access Denied: Faculty accounts cannot dispatch official letters ❌" });
-        }
-        const isCreator = String(letter.sender.userId) === String(user._id);
-        const isPrincipal = user.role === "Principal";
-        const isDeptHOD = user.role === "HOD" && user.department === letter.sender.department;
+        const isCreator = String(letter.sender?.userId) === String(user._id);
+        const isPrincipal = user.role === "Principal" || user.role === "Admin";
+        const isDeptHOD = user.role === "HOD" && user.department === letter.sender?.department;
+        const isAllowedFaculty = user.role === "Faculty" && isCreator && ["invitation", "thanking", "official_comm"].includes(letter.letterType);
 
-        if (!isCreator && !isPrincipal && !isDeptHOD) {
+        if (!isCreator && !isPrincipal && !isDeptHOD && !isAllowedFaculty) {
             return res.status(403).json({ error: "Unauthorized to dispatch this official letter ❌" });
         }
 
@@ -371,6 +374,250 @@ router.post("/workshop-summary-pdf/:workshopId", authenticateUser, async (req, r
     } catch (err) {
         console.error("Generate workshop summary PDF error:", err);
         res.status(500).json({ error: err.message || "Failed to generate official workshop summary report ❌" });
+    }
+});
+
+// ================= OFFICIAL LETTERS REGISTER ENDPOINTS =================
+router.get("/register", authenticateUser, async (req, res) => {
+    try {
+        const { role, department } = req.user;
+        const { search, letterType, entryType, dept } = req.query;
+
+        let query = {};
+
+        // HOD can see registers in their department or general administration
+        if (role === "HOD") {
+            query.$or = [
+                { department: department },
+                { department: "General Administration" },
+                { createdBy: req.user._id }
+            ];
+        }
+
+        if (dept && dept !== "all") {
+            query.department = dept;
+        }
+
+        if (letterType && letterType !== "all") {
+            query.letterType = letterType;
+        }
+
+        if (entryType && entryType !== "all") {
+            query.entryType = entryType;
+        }
+
+        if (search && search.trim()) {
+            const regex = new RegExp(search.trim(), "i");
+            const searchConditions = [
+                { registerTitle: regex },
+                { registerNumber: regex },
+                { subject: regex },
+                { senderOrRecipient: regex },
+                { description: regex },
+                { createdByName: regex }
+            ];
+            if (query.$or) {
+                query.$and = [{ $or: query.$or }, { $or: searchConditions }];
+                delete query.$or;
+            } else {
+                query.$or = searchConditions;
+            }
+        }
+
+        const registers = await LetterRegister.find(query)
+            .sort({ createdAt: -1 })
+            .limit(200);
+
+        res.json({
+            success: true,
+            registers
+        });
+    } catch (err) {
+        console.error("Fetch letter registers error:", err);
+        res.status(500).json({ error: "Failed to load official letters register ❌" });
+    }
+});
+
+router.post("/register", authenticateUser, async (req, res) => {
+    try {
+        const { role, _id: userId, name: userName, department: userDept } = req.user;
+        if (role !== "Principal" && role !== "HOD" && role !== "Admin") {
+            return res.status(403).json({ error: "Access Denied: Only HOD or Principal can maintain official letters register ❌" });
+        }
+
+        const {
+            registerTitle,
+            registerNumber,
+            letterType,
+            subject,
+            senderOrRecipient,
+            entryType,
+            letterDate,
+            receivedOrDispatchDate,
+            department,
+            description,
+            attachment,
+            attachmentName
+        } = req.body;
+
+        if (!registerTitle || !registerTitle.trim()) {
+            return res.status(400).json({ error: "Register Title is required ❌" });
+        }
+        if (!registerNumber || !registerNumber.trim()) {
+            return res.status(400).json({ error: "Register Number / Reference Number is required ❌" });
+        }
+        if (!subject || !subject.trim()) {
+            return res.status(400).json({ error: "Subject is required ❌" });
+        }
+        if (!senderOrRecipient || !senderOrRecipient.trim()) {
+            return res.status(400).json({ error: "Sender / Recipient is required ❌" });
+        }
+
+        const trimmedRegNum = registerNumber.trim();
+        // Check uniqueness
+        const existing = await LetterRegister.findOne({ registerNumber: trimmedRegNum });
+        if (existing) {
+            return res.status(400).json({ 
+                error: `Duplicate Register Number: A record with register number "${trimmedRegNum}" already exists in the system ❌` 
+            });
+        }
+
+        const targetDepartment = department && department.trim() 
+            ? department.trim() 
+            : (role === "HOD" ? userDept : "General Administration");
+
+        const newEntry = new LetterRegister({
+            registerTitle: registerTitle.trim(),
+            registerNumber: trimmedRegNum,
+            letterType: letterType || "Inward",
+            subject: subject.trim(),
+            senderOrRecipient: senderOrRecipient.trim(),
+            entryType: entryType || "Inward",
+            letterDate: letterDate ? new Date(letterDate) : new Date(),
+            receivedOrDispatchDate: receivedOrDispatchDate ? new Date(receivedOrDispatchDate) : new Date(),
+            department: targetDepartment,
+            description: description ? description.trim() : "",
+            attachment: attachment || "",
+            attachmentName: attachmentName || "",
+            createdBy: userId,
+            createdByName: userName,
+            createdByRole: role
+        });
+
+        await newEntry.save();
+
+        res.status(201).json({
+            success: true,
+            message: "Official Letter Register entry saved successfully! ✅",
+            register: newEntry
+        });
+    } catch (err) {
+        console.error("Create letter register error:", err);
+        res.status(500).json({ error: err.message || "Failed to create register entry ❌" });
+    }
+});
+
+router.put("/register/:id", authenticateUser, async (req, res) => {
+    try {
+        const { role, _id: userId, name: userName, department: userDept } = req.user;
+        if (role !== "Principal" && role !== "HOD" && role !== "Admin") {
+            return res.status(403).json({ error: "Access Denied ❌" });
+        }
+
+        const entry = await LetterRegister.findById(req.params.id);
+        if (!entry) {
+            return res.status(404).json({ error: "Register entry not found ❌" });
+        }
+
+        // HOD permission check: only edit within department or if they created it
+        if (role === "HOD" && entry.department !== userDept && entry.createdBy.toString() !== userId.toString()) {
+            return res.status(403).json({ error: "Access Denied: You can only edit entries within your department ❌" });
+        }
+
+        const {
+            registerTitle,
+            registerNumber,
+            letterType,
+            subject,
+            senderOrRecipient,
+            entryType,
+            letterDate,
+            receivedOrDispatchDate,
+            department,
+            description,
+            attachment,
+            attachmentName
+        } = req.body;
+
+        if (registerNumber && registerNumber.trim() !== entry.registerNumber) {
+            const trimmedRegNum = registerNumber.trim();
+            const existing = await LetterRegister.findOne({ 
+                registerNumber: trimmedRegNum,
+                _id: { $ne: entry._id }
+            });
+            if (existing) {
+                return res.status(400).json({ 
+                    error: `Duplicate Register Number: A record with register number "${trimmedRegNum}" already exists ❌` 
+                });
+            }
+            entry.registerNumber = trimmedRegNum;
+        }
+
+        if (registerTitle) entry.registerTitle = registerTitle.trim();
+        if (letterType) entry.letterType = letterType;
+        if (subject) entry.subject = subject.trim();
+        if (senderOrRecipient) entry.senderOrRecipient = senderOrRecipient.trim();
+        if (entryType) entry.entryType = entryType;
+        if (letterDate) entry.letterDate = new Date(letterDate);
+        if (receivedOrDispatchDate) entry.receivedOrDispatchDate = new Date(receivedOrDispatchDate);
+        if (department) entry.department = department.trim();
+        if (description !== undefined) entry.description = description.trim();
+        if (attachment !== undefined) {
+            entry.attachment = attachment;
+            entry.attachmentName = attachmentName || "";
+        }
+
+        entry.updatedBy = userId;
+        entry.updatedByName = userName;
+
+        await entry.save();
+
+        res.json({
+            success: true,
+            message: "Register entry updated successfully! ✅",
+            register: entry
+        });
+    } catch (err) {
+        console.error("Update letter register error:", err);
+        res.status(500).json({ error: err.message || "Failed to update register entry ❌" });
+    }
+});
+
+router.delete("/register/:id", authenticateUser, async (req, res) => {
+    try {
+        const { role, _id: userId, department: userDept } = req.user;
+        if (role !== "Principal" && role !== "HOD" && role !== "Admin") {
+            return res.status(403).json({ error: "Access Denied ❌" });
+        }
+
+        const entry = await LetterRegister.findById(req.params.id);
+        if (!entry) {
+            return res.status(404).json({ error: "Register entry not found ❌" });
+        }
+
+        if (role === "HOD" && entry.department !== userDept && entry.createdBy.toString() !== userId.toString()) {
+            return res.status(403).json({ error: "Access Denied: You cannot delete entries from other departments ❌" });
+        }
+
+        await LetterRegister.findByIdAndDelete(req.params.id);
+
+        res.json({
+            success: true,
+            message: "Register entry deleted successfully! ✅"
+        });
+    } catch (err) {
+        console.error("Delete letter register error:", err);
+        res.status(500).json({ error: err.message || "Failed to delete register entry ❌" });
     }
 });
 

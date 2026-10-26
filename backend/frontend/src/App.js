@@ -3,21 +3,21 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 
-function App() {
   const [step, setStep] = useState(() => {
     try {
       const savedUser = localStorage.getItem("crm_user");
       const token = localStorage.getItem("accessToken");
-      return (savedUser && token) ? 3 : 1;
+      return savedUser && token ? 3 : 1;
     } catch {
       return 1;
     }
   });
+
   const [user, setUser] = useState(() => {
     try {
       const savedUser = localStorage.getItem("crm_user");
       const token = localStorage.getItem("accessToken");
-      return (savedUser && token) ? JSON.parse(savedUser) : null;
+      return savedUser && token ? JSON.parse(savedUser) : null;
     } catch {
       return null;
     }

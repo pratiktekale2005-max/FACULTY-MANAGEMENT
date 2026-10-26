@@ -592,6 +592,25 @@ function MyProfileView({ currentUser, onRefresh }) {
                         </span>
                     </div>
 
+                    {/* Institutional Read-Only Attributes */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Official Email</span>
+                            <span className="font-mono text-slate-300 text-xs block mt-1">{activeData.email}</span>
+                            <span className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">🔒 Verified login</span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Employee ID</span>
+                            <span className="font-mono text-indigo-400 font-bold text-xs block mt-1">{activeData.employeeId || "Assigned by Admin"}</span>
+                            <span className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">🔒 Protected identifier</span>
+                        </div>
+                        <div>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Department</span>
+                            <span className="text-slate-300 font-semibold text-xs block mt-1">{activeData.department || "Institutional"}</span>
+                            <span className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">🔒 Administrative allocation</span>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Name *</label>

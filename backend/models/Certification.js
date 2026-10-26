@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const certificationSchema = new mongoose.Schema({
+    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
     facultyId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     title: { type: String, required: true },
     issuedBy: { type: String, required: true },
@@ -15,6 +16,8 @@ const certificationSchema = new mongoose.Schema({
         ]
     },
     description: { type: String, default: "" },
+    skills: { type: String, default: "" },
+    academicYear: { type: String, default: "" },
     issueDate: { type: String, required: true }, // YYYY-MM-DD
     expiryDate: { type: String, default: "" }, // Optional
     certificateNumber: { type: String, default: "" }, // Optional

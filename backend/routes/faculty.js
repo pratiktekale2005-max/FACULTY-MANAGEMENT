@@ -148,7 +148,6 @@ router.get("/:id/full-profile", authenticateUser, async (req, res) => {
 });
 
 const { verifyFacultyCredentials } = require("../services/emailService");
-
 // ================= GET CURRENT USER PROFILE =================
 router.get("/me", authenticateUser, async (req, res) => {
     try {
@@ -322,7 +321,6 @@ router.put("/me/email-settings", authenticateUser, async (req, res) => {
         res.status(500).json({ error: err.message || "Failed to update email settings ❌" });
     }
 });
-
 // ================= GET SINGLE FACULTY PORTFOLIO =================
 router.get("/:id", authenticateUser, async (req, res) => {
     const { id } = req.params;
@@ -393,12 +391,19 @@ router.put("/:id", authenticateUser, async (req, res) => {
         if (achievements !== undefined) user.achievements = achievements;
         if (qualification !== undefined) user.qualification = qualification;
         if (researchInterests !== undefined) user.researchInterests = researchInterests;
-        if (designation !== undefined) user.designation = designation;
-        if (department !== undefined) user.department = department;
-        if (employeeId !== undefined) user.employeeId = employeeId;
         if (joiningDate !== undefined) user.joiningDate = joiningDate;
         if (photoBase64 !== undefined) user.photoPath = photoBase64;
         if (resumeBase64 !== undefined) user.resumePath = resumeBase64;
+
+        // Protected fields: Only Principal can modify administrative fields
+        if (role === "Principal") {
+            if (designation !== undefined) user.designation = designation;
+            if (department !== undefined) user.department = department;
+            if (employeeId !== undefined) user.employeeId = employeeId;
+        } else {
+            // For faculty, allow updating title/designation if desired, but keep employeeId and department fixed
+            if (designation !== undefined && user.role !== "Principal") user.designation = designation;
+        }
 
         await user.save();
         res.json({ message: "Profile details updated successfully ✅", faculty: user });

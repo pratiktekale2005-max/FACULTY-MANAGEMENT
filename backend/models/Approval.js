@@ -2,10 +2,15 @@ const mongoose = require("mongoose");
 
 const approvalSchema = new mongoose.Schema({
     organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
-    entityType: { type: String, enum: ["WORKSHOP", "PUBLICATION", "ACTIVITY"], required: true },
-    entityId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Points to Workshop, Paper, or Activity
+    entityType: { 
+        type: String, 
+        enum: ["WORKSHOP", "PUBLICATION", "ACTIVITY", "LEAVE", "REQUEST"], 
+        required: true 
+    },
+    entityId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Points to Workshop, Paper, Activity, or Leave
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department", default: null },
+    departmentName: { type: String, default: "" },
     status: { 
         type: String, 
         enum: ["DRAFT", "SUBMITTED", "HOD_APPROVED", "APPROVED", "REJECTED", "RETURNED"], 
@@ -32,5 +37,9 @@ const approvalSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });
+
+approvalSchema.index({ organizationId: 1, currentLevel: 1, status: 1 });
+approvalSchema.index({ organizationId: 1, submittedBy: 1 });
+approvalSchema.index({ organizationId: 1, departmentName: 1 });
 
 module.exports = mongoose.models.Approval || mongoose.model("Approval", approvalSchema);

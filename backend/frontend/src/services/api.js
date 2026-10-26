@@ -99,11 +99,13 @@ const invalidateOnMutation = (endpoint) => {
         invalidateCacheByPrefix(`/${base}`);
     }
     // Cross-cutting module invalidations
-    if (endpoint.includes("/approvals") || endpoint.includes("/workshops") || endpoint.includes("/papers") || endpoint.includes("/activities")) {
+    if (endpoint.includes("/approvals") || endpoint.includes("/workshops") || endpoint.includes("/papers") || endpoint.includes("/activities") || endpoint.includes("/submissions") || endpoint.includes("/certifications")) {
         invalidateCacheByPrefix("/approvals");
         invalidateCacheByPrefix("/workshops");
         invalidateCacheByPrefix("/papers");
         invalidateCacheByPrefix("/activities");
+        invalidateCacheByPrefix("/submissions");
+        invalidateCacheByPrefix("/certifications");
         invalidateCacheByPrefix("/analytics");
         invalidateCacheByPrefix("/users");
     }

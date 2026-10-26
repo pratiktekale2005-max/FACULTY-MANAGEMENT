@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
+import AssignmentMarksPanel from "./AssignmentMarksPanel";
 
 function AssignmentsPanel({ currentUser }) {
+    const [activeSection, setActiveSection] = useState("assignments"); // "assignments" | "marks"
     const [assignments, setAssignments] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -97,6 +99,11 @@ function AssignmentsPanel({ currentUser }) {
         e.preventDefault();
         if (!form.title || !form.subjectId || !form.academicYear || !form.semester || !form.givenDate || !form.deadlineDate) {
             alert("Please fill all required fields (*) ❌");
+            return;
+        }
+
+        if (new Date(form.deadlineDate) < new Date(form.givenDate)) {
+            alert("Invalid Due Date: Due date cannot be earlier than Created / Given date! ❌");
             return;
         }
 
@@ -207,24 +214,64 @@ function AssignmentsPanel({ currentUser }) {
     const paginatedAss = filteredAss.slice((page - 1) * limit, page * limit);
 
     return (
-        <div className="bg-[#101622] border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl text-xs text-slate-205">
-            
-            {/* Header section */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-850 pb-4">
-                <div>
-                    <h2 className="text-sm font-bold text-slate-105 uppercase tracking-wider">Subject Coursework Assignments</h2>
-                    <p className="text-[10px] text-slate-400 mt-1">Publish home assignments, schedule deadlines, attach manuals, and review submission sheets</p>
-                </div>
-
-                {currentUser.role === "Faculty" && (
-                    <button
-                        onClick={() => { resetForm(); setEditingAss(null); setShowModal(true); }}
-                        className="px-4.5 py-2.5 bg-indigo-650 hover:bg-indigo-600 text-white font-bold rounded-xl transition-all shadow-md"
-                    >
-                        ＋ Create Assignment
-                    </button>
-                )}
+        <div className="space-y-6">
+            {/* Top Sub-tabs Switcher */}
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl w-fit">
+                <button
+                    type="button"
+                    onClick={() => setActiveSection("assignments")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                        activeSection === "assignments"
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+                            : "text-slate-400 hover:text-slate-200"
+                    }`}
+                >
+                    <span>📋</span>
+                    <span>Coursework Assignments</span>
+                    <span className="px-1.5 py-0.2 bg-slate-950/60 rounded-full text-[10px]">
+                        {assignments.length}
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveSection("marks")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                        activeSection === "marks"
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25"
+                            : "text-slate-400 hover:text-slate-200"
+                    }`}
+                >
+                    <span>📊</span>
+                    <span>Continuous Assessment Marks (/10)</span>
+                </button>
             </div>
+
+            {activeSection === "marks" ? (
+                <AssignmentMarksPanel currentUser={currentUser} />
+            ) : (
+                <div className="bg-[#101622] border border-slate-800 p-6 rounded-2xl space-y-6 shadow-xl text-xs text-slate-205">
+                    
+                    {/* Header section with Create Assignment */}
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-850 pb-4">
+                        <div>
+                            <h2 className="text-base font-bold text-white flex items-center gap-2">
+                                <span>📝</span> Subject Coursework Assignments
+                            </h2>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                                Create and publish assignments with due dates, attach instruction PDFs, and track student completion.
+                            </p>
+                        </div>
+
+                        {currentUser.role === "Faculty" && (
+                            <button
+                                onClick={() => { resetForm(); setEditingAss(null); setShowModal(true); }}
+                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 cursor-pointer"
+                            >
+                                <span>➕</span>
+                                <span>Create Assignment</span>
+                            </button>
+                        )}
+                    </div>
 
             {/* Filters Bar */}
             <div className="flex flex-col md:flex-row items-center gap-3.5 bg-slate-950/20 p-4 border border-slate-850 rounded-xl">
@@ -535,7 +582,8 @@ function AssignmentsPanel({ currentUser }) {
                     </div>
                 </div>
             )}
-
+                </div>
+            )}
         </div>
     );
 }

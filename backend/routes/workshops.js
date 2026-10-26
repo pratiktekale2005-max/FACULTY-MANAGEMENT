@@ -6,7 +6,7 @@ const Approval = require("../models/Approval");
 const Organization = require("../models/Organization");
 const Department = require("../models/Department");
 const OfficialLetter = require("../models/OfficialLetter");
-const { sendInvitationEmail, sendThankingEmail, sendWorkshopApprovalEmail, sendOfficialLetterEmail } = require("../services/emailService");
+const { sendInvitationEmail, sendThankingEmail, sendWorkshopApprovalEmail, sendOfficialLetterEmail, sendWorkshopRequestToHOD } = require("../services/emailService");
 const { generateLetterPdf, generateRemunerationPdf, generateWorkshopSummaryPdf } = require("../services/letterPdfService");
 const { authenticateUser, requireRole } = require("./authMiddleware");
 
@@ -51,10 +51,66 @@ router.get("/", authenticateUser, async (req, res) => {
         }
 
         const workshops = await Workshop.find(query).populate("submittedBy", "name email department designation");
-        res.json({ workshops });
+        const formatted = workshops.map(w => {
+            const doc = w.toObject();
+            if (!doc.guests || doc.guests.length === 0) {
+                if (doc.speakerName) {
+                    doc.guests = [{
+                        _id: doc._id,
+                        name: doc.speakerName,
+                        designation: doc.guestDesignation || doc.speakerBio || "",
+                        organization: doc.guestOrganization || doc.speakerOrganization || "",
+                        email: doc.guestEmail || "",
+                        contact: doc.speakerContact || "",
+                        invitationStatus: doc.invitationSentAt ? "Sent" : "Pending",
+                        invitationSentAt: doc.invitationSentAt || null,
+                        thankingStatus: doc.thankingSentAt ? "Sent" : "Pending",
+                        thankingSentAt: doc.thankingSentAt || null
+                    }];
+                } else {
+                    doc.guests = [];
+                }
+            }
+            return doc;
+        });
+        res.json({ workshops: formatted });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to fetch workshops ❌" });
+    }
+});
+
+// ================= GET SINGLE WORKSHOP =================
+router.get("/:id", authenticateUser, async (req, res) => {
+    try {
+        const workshop = await Workshop.findOne({ _id: req.params.id, organizationId: req.user.organizationId })
+            .populate("submittedBy", "name email department designation");
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+        const doc = workshop.toObject();
+        if (!doc.guests || doc.guests.length === 0) {
+            if (doc.speakerName) {
+                doc.guests = [{
+                    _id: doc._id,
+                    name: doc.speakerName,
+                    designation: doc.guestDesignation || doc.speakerBio || "",
+                    organization: doc.guestOrganization || doc.speakerOrganization || "",
+                    email: doc.guestEmail || "",
+                    contact: doc.speakerContact || "",
+                    invitationStatus: doc.invitationSentAt ? "Sent" : "Pending",
+                    invitationSentAt: doc.invitationSentAt || null,
+                    thankingStatus: doc.thankingSentAt ? "Sent" : "Pending",
+                    thankingSentAt: doc.thankingSentAt || null
+                }];
+            } else {
+                doc.guests = [];
+            }
+        }
+        res.json({ workshop: doc });
+    } catch (err) {
+        console.error("Fetch single workshop error:", err);
+        res.status(500).json({ error: "Failed to fetch event details ❌" });
     }
 });
 
@@ -134,6 +190,35 @@ router.post("/", authenticateUser, async (req, res) => {
             });
         } catch (notifErr) {
             console.error("Failed to create HOD notification:", notifErr);
+        }
+
+        // Look up Department HOD to send email notification (Requirement 4)
+        try {
+            const hodUser = await User.findOne({
+                role: "HOD",
+                $or: [
+                    { department: req.user.department },
+                    { departmentId: req.user.departmentId }
+                ]
+            });
+
+            if (hodUser && hodUser.email) {
+                sendWorkshopRequestToHOD({
+                    hodEmail: hodUser.email,
+                    hodName: hodUser.name,
+                    facultyName: req.user.name || "Faculty Member",
+                    department: req.user.department || "",
+                    workshopTitle: title,
+                    workshopType: workshopType || "Workshop",
+                    date: date ? new Date(date).toLocaleDateString() : "",
+                    time: time || "",
+                    venue: venue || "",
+                    speakerName: speakerName || "",
+                    description: description || ""
+                }).catch(e => console.error("Async workshop email error to HOD:", e));
+            }
+        } catch (emailLookupErr) {
+            console.error("Failed to route workshop email to HOD:", emailLookupErr);
         }
 
         res.json({ message: "Workshop logged successfully for validation ✅", workshop: newWorkshop });
@@ -232,6 +317,241 @@ router.put("/:id", authenticateUser, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Failed to update workshop ❌" });
+    }
+});
+
+// ================= UPLOAD EVENT PHOTOS =================
+router.post("/:id/photos", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { photosBase64 } = req.body;
+
+    if (!photosBase64 || !Array.isArray(photosBase64) || photosBase64.length === 0) {
+        return res.status(400).json({ error: "Please select at least one valid image to upload ❌" });
+    }
+
+    // Validate image format and size (<5MB each)
+    const validPhotos = [];
+    for (const photo of photosBase64) {
+        if (typeof photo !== "string" || !photo.startsWith("data:image/")) {
+            return res.status(400).json({ error: "Invalid image format. Allowed formats: JPG, JPEG, PNG, WEBP ❌" });
+        }
+        const sizeInBytes = Math.round((photo.length * 3) / 4);
+        if (sizeInBytes > 5 * 1024 * 1024) {
+            return res.status(400).json({ error: "Image file size exceeds 5MB limit. Please compress before uploading ❌" });
+        }
+        validPhotos.push(photo);
+    }
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+
+        if (req.user.role === "Faculty" && String(workshop.submittedBy) !== String(req.user._id) && workshop.department !== req.user.department) {
+            return res.status(403).json({ error: "Access denied: Unauthorized to upload photos for this event ❌" });
+        }
+
+        if (!Array.isArray(workshop.photos)) {
+            workshop.photos = [];
+        }
+
+        workshop.photos.push(...validPhotos);
+        await workshop.save();
+
+        res.json({ 
+            message: `${validPhotos.length} photo${validPhotos.length > 1 ? "s" : ""} uploaded successfully! 📸✅`, 
+            workshop, 
+            photos: workshop.photos 
+        });
+    } catch (err) {
+        console.error("Upload event photos error:", err);
+        res.status(500).json({ error: "Failed to upload event photos ❌" });
+    }
+});
+
+// ================= DELETE EVENT PHOTO =================
+router.delete("/:id/photos/:photoIndex", authenticateUser, async (req, res) => {
+    const { id, photoIndex } = req.params;
+    const index = parseInt(photoIndex, 10);
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+
+        if (req.user.role === "Faculty" && String(workshop.submittedBy) !== String(req.user._id) && workshop.department !== req.user.department) {
+            return res.status(403).json({ error: "Access denied: Unauthorized to delete photos for this event ❌" });
+        }
+
+        if (!Array.isArray(workshop.photos) || isNaN(index) || index < 0 || index >= workshop.photos.length) {
+            return res.status(400).json({ error: "Invalid photo index ❌" });
+        }
+
+        workshop.photos.splice(index, 1);
+        await workshop.save();
+
+        res.json({ message: "Photo deleted successfully! 🗑️✅", workshop, photos: workshop.photos });
+    } catch (err) {
+        console.error("Delete photo error:", err);
+        res.status(500).json({ error: "Failed to delete photo ❌" });
+    }
+});
+
+// ================= ADD GUEST TO EVENT =================
+router.post("/:id/guests", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { name, designation, organization, email, contact } = req.body;
+
+    if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Guest name is required ❌" });
+    }
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+
+        if (req.user.role === "Faculty" && String(workshop.submittedBy) !== String(req.user._id) && workshop.department !== req.user.department) {
+            return res.status(403).json({ error: "Access denied: You are not authorized to manage guests for this event ❌" });
+        }
+
+        if (!Array.isArray(workshop.guests)) {
+            workshop.guests = [];
+        }
+
+        const newGuest = {
+            name: name.trim(),
+            designation: designation || "",
+            organization: organization || "",
+            email: email ? email.trim().toLowerCase() : "",
+            contact: contact ? contact.trim() : "",
+            invitationStatus: "Pending",
+            invitationSentAt: null,
+            thankingStatus: "Pending",
+            thankingSentAt: null
+        };
+
+        workshop.guests.push(newGuest);
+
+        // Sync primary speaker if first guest
+        if (workshop.guests.length === 1 || !workshop.speakerName) {
+            workshop.speakerName = newGuest.name;
+            workshop.guestDesignation = newGuest.designation;
+            workshop.guestOrganization = newGuest.organization;
+            workshop.guestEmail = newGuest.email;
+            workshop.speakerContact = newGuest.contact;
+        }
+
+        await workshop.save();
+        res.status(201).json({ 
+            message: "Guest added successfully! 👤✅", 
+            workshop, 
+            guest: workshop.guests[workshop.guests.length - 1] 
+        });
+    } catch (err) {
+        console.error("Add guest error:", err);
+        res.status(500).json({ error: "Failed to add guest ❌" });
+    }
+});
+
+// ================= EDIT GUEST DETAILS =================
+router.put("/:id/guests/:guestId", authenticateUser, async (req, res) => {
+    const { id, guestId } = req.params;
+    const { name, designation, organization, email, contact, invitationStatus, thankingStatus } = req.body;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+
+        if (req.user.role === "Faculty" && String(workshop.submittedBy) !== String(req.user._id) && workshop.department !== req.user.department) {
+            return res.status(403).json({ error: "Access denied: You are not authorized to manage guests for this event ❌" });
+        }
+
+        if (!Array.isArray(workshop.guests)) {
+            workshop.guests = [];
+        }
+
+        let guest = workshop.guests.id(guestId);
+        if (!guest && String(workshop._id) === String(guestId)) {
+            // First time editing synthesized primary guest: insert as real guest
+            workshop.guests.push({
+                name: name ? name.trim() : workshop.speakerName,
+                designation: designation !== undefined ? designation : workshop.guestDesignation,
+                organization: organization !== undefined ? organization : workshop.guestOrganization,
+                email: email !== undefined ? email.trim().toLowerCase() : workshop.guestEmail,
+                contact: contact !== undefined ? contact.trim() : workshop.speakerContact,
+                invitationStatus: invitationStatus || (workshop.invitationSentAt ? "Sent" : "Pending"),
+                thankingStatus: thankingStatus || (workshop.thankingSentAt ? "Sent" : "Pending")
+            });
+            guest = workshop.guests[workshop.guests.length - 1];
+        } else if (!guest) {
+            return res.status(404).json({ error: "Guest not found in event ❌" });
+        }
+
+        if (name) guest.name = name.trim();
+        if (designation !== undefined) guest.designation = designation;
+        if (organization !== undefined) guest.organization = organization;
+        if (email !== undefined) guest.email = email.trim().toLowerCase();
+        if (contact !== undefined) guest.contact = contact.trim();
+        if (invitationStatus) guest.invitationStatus = invitationStatus;
+        if (thankingStatus) guest.thankingStatus = thankingStatus;
+
+        // If primary guest, sync to top-level workshop fields
+        if (workshop.guests.length > 0 && String(workshop.guests[0]._id) === String(guest._id)) {
+            workshop.speakerName = guest.name;
+            workshop.guestDesignation = guest.designation;
+            workshop.guestOrganization = guest.organization;
+            workshop.guestEmail = guest.email;
+            workshop.speakerContact = guest.contact;
+        }
+
+        await workshop.save();
+        res.json({ message: "Guest details updated successfully! ✅", workshop, guest });
+    } catch (err) {
+        console.error("Update guest error:", err);
+        res.status(500).json({ error: "Failed to update guest ❌" });
+    }
+});
+
+// ================= REMOVE GUEST FROM EVENT =================
+router.delete("/:id/guests/:guestId", authenticateUser, async (req, res) => {
+    const { id, guestId } = req.params;
+
+    try {
+        const workshop = await Workshop.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!workshop) {
+            return res.status(404).json({ error: "Event record not found ❌" });
+        }
+
+        if (req.user.role === "Faculty" && String(workshop.submittedBy) !== String(req.user._id) && workshop.department !== req.user.department) {
+            return res.status(403).json({ error: "Access denied: You are not authorized to manage guests for this event ❌" });
+        }
+
+        const initialCount = (workshop.guests || []).length;
+        workshop.guests = (workshop.guests || []).filter(g => String(g._id) !== String(guestId));
+
+        if (workshop.guests.length === initialCount && String(workshop._id) === String(guestId)) {
+            // Clearing the only synthesized guest
+            workshop.speakerName = "Guest Speaker";
+            workshop.guestEmail = "";
+        } else if (workshop.guests.length > 0) {
+            workshop.speakerName = workshop.guests[0].name;
+            workshop.guestDesignation = workshop.guests[0].designation;
+            workshop.guestOrganization = workshop.guests[0].organization;
+            workshop.guestEmail = workshop.guests[0].email;
+            workshop.speakerContact = workshop.guests[0].contact;
+        }
+
+        await workshop.save();
+        res.json({ message: "Guest removed successfully! 🗑️✅", workshop });
+    } catch (err) {
+        console.error("Remove guest error:", err);
+        res.status(500).json({ error: "Failed to remove guest ❌" });
     }
 });
 
@@ -755,7 +1075,10 @@ router.post("/:id/generate-summary-report-pdf", authenticateUser, async (req, re
 router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
     const { id } = req.params;
     const { 
+        guestId,
         guestEmail, 
+        recipientEmail,
+        guestName,
         customHtml, 
         customMessage, 
         attachmentBase64, 
@@ -777,12 +1100,12 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
                 date: letterData?.eventDate || new Date(),
                 time: letterData?.eventTime || "10:00 AM - 01:00 PM",
                 venue: letterData?.eventVenue || "Campus Auditorium",
-                speakerName: letterData?.guestName || "Distinguished Expert",
+                speakerName: letterData?.guestName || guestName || "Distinguished Expert",
                 speakerBio: letterData?.guestDesignation || "",
                 speakerOrganization: letterData?.guestOrg || "",
                 guestDesignation: letterData?.guestDesignation || "",
                 guestOrganization: letterData?.guestOrg || "",
-                guestEmail: guestEmail || "",
+                guestEmail: recipientEmail || guestEmail || "",
                 workshopType: "Arranged by Self",
                 status: req.user.role === "Principal" ? "verified" : "pending",
                 submittedBy: req.user._id,
@@ -791,10 +1114,25 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
             await workshop.save();
         }
 
-        const emailToSend = req.body.recipientEmail || guestEmail || workshop.guestEmail;
+        const emailToSend = recipientEmail || guestEmail || workshop.guestEmail;
         if (!emailToSend) {
             return res.status(400).json({ error: "Recipient email is required to send invitation ❌" });
         }
+
+        // Identify target guest if guests array exists
+        let targetGuest = null;
+        if (workshop.guests && Array.isArray(workshop.guests)) {
+            if (guestId) {
+                targetGuest = workshop.guests.id ? workshop.guests.id(guestId) : workshop.guests.find(g => g._id?.toString() === guestId.toString());
+            }
+            if (!targetGuest && emailToSend) {
+                targetGuest = workshop.guests.find(g => g.email && g.email.toLowerCase() === emailToSend.toLowerCase());
+            }
+        }
+
+        const resolvedGuestName = targetGuest?.name || guestName || letterData?.guestName || workshop.speakerName || "Distinguished Expert";
+        const resolvedGuestDesignation = targetGuest?.designation || letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor";
+        const resolvedGuestOrg = targetGuest?.organization || letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University";
 
         let finalAttachment = attachmentBase64;
 
@@ -807,9 +1145,9 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
                     refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
                     letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
                     letterType: "invitation",
-                    guestName: letterData?.guestName || workshop.speakerName || "Distinguished Expert",
-                    guestDesignation: letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor",
-                    guestOrg: letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University",
+                    guestName: resolvedGuestName,
+                    guestDesignation: resolvedGuestDesignation,
+                    guestOrg: resolvedGuestOrg,
                     eventTitle: letterData?.eventTitle || workshop.title || "Special Academic Session",
                     eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
                     eventTime: letterData?.eventTime || workshop.time || "10:00 AM - 01:00 PM",
@@ -842,7 +1180,7 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
         // Send Email
         const result = await sendInvitationEmail({
             guestEmail: emailToSend,
-            guestName: workshop.speakerName,
+            guestName: resolvedGuestName,
             eventTitle: workshop.title,
             eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
@@ -860,6 +1198,10 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
 
         workshop.guestEmail = emailToSend;
         workshop.invitationSentAt = new Date();
+        if (targetGuest) {
+            targetGuest.invitationStatus = "Sent";
+            targetGuest.invitationSentAt = new Date();
+        }
         await workshop.save();
 
         res.json({
@@ -888,8 +1230,10 @@ router.post("/:id/send-invitation", authenticateUser, async (req, res) => {
 router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
     const { id } = req.params;
     const { 
+        guestId,
         guestEmail, 
         recipientEmail,
+        guestName,
         customHtml, 
         customMessage, 
         attachmentBase64, 
@@ -911,7 +1255,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
                 date: letterData?.eventDate || new Date(),
                 time: letterData?.eventTime || "10:00 AM - 01:00 PM",
                 venue: letterData?.eventVenue || "Campus Auditorium",
-                speakerName: letterData?.guestName || "Distinguished Expert",
+                speakerName: letterData?.guestName || guestName || "Distinguished Expert",
                 speakerBio: letterData?.guestDesignation || "",
                 speakerOrganization: letterData?.guestOrg || "",
                 guestDesignation: letterData?.guestDesignation || "",
@@ -925,10 +1269,25 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
             await workshop.save();
         }
 
-        const emailToSend = req.body.recipientEmail || guestEmail || workshop.guestEmail;
+        const emailToSend = recipientEmail || guestEmail || workshop.guestEmail;
         if (!emailToSend) {
             return res.status(400).json({ error: "Recipient email is required to send thanking letter ❌" });
         }
+
+        // Identify target guest if guests array exists
+        let targetGuest = null;
+        if (workshop.guests && Array.isArray(workshop.guests)) {
+            if (guestId) {
+                targetGuest = workshop.guests.id ? workshop.guests.id(guestId) : workshop.guests.find(g => g._id?.toString() === guestId.toString());
+            }
+            if (!targetGuest && emailToSend) {
+                targetGuest = workshop.guests.find(g => g.email && g.email.toLowerCase() === emailToSend.toLowerCase());
+            }
+        }
+
+        const resolvedGuestName = targetGuest?.name || guestName || letterData?.guestName || workshop.speakerName || "Distinguished Expert";
+        const resolvedGuestDesignation = targetGuest?.designation || letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor";
+        const resolvedGuestOrg = targetGuest?.organization || letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University";
 
         let finalAttachment = attachmentBase64;
 
@@ -941,9 +1300,9 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
                     refNo: letterData?.refNo || `EDU/${(workshop.department || "DEPT").toUpperCase()}/${new Date().getFullYear()}/${(workshop._id || "001").toString().slice(-4).toUpperCase()}`,
                     letterDate: letterData?.letterDate || new Date().toISOString().split("T")[0],
                     letterType: "thanking",
-                    guestName: letterData?.guestName || workshop.speakerName || "Distinguished Expert",
-                    guestDesignation: letterData?.guestDesignation || workshop.guestDesignation || workshop.speakerBio || "Industry Consultant / Senior Professor",
-                    guestOrg: letterData?.guestOrg || workshop.guestOrganization || workshop.speakerOrganization || "Tech Enterprise / University",
+                    guestName: resolvedGuestName,
+                    guestDesignation: resolvedGuestDesignation,
+                    guestOrg: resolvedGuestOrg,
                     eventTitle: letterData?.eventTitle || workshop.title || "Special Academic Session",
                     eventDate: letterData?.eventDate || (workshop.date ? new Date(workshop.date).toISOString().split("T")[0] : ""),
                     bodyText: letterData?.bodyText || "",
@@ -974,7 +1333,7 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
         // Send Email using faculty's authenticated credentials
         const result = await sendThankingEmail({
             guestEmail: emailToSend,
-            guestName: workshop.speakerName,
+            guestName: resolvedGuestName,
             eventTitle: workshop.title,
             eventType: workshop.workshopType && workshop.workshopType.toLowerCase().includes("seminar") ? "Seminar" : "Workshop",
             date: workshop.date ? new Date(workshop.date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "",
@@ -990,6 +1349,10 @@ router.post("/:id/send-thanking", authenticateUser, async (req, res) => {
 
         workshop.guestEmail = emailToSend;
         workshop.thankingSentAt = new Date();
+        if (targetGuest) {
+            targetGuest.thankingStatus = "Sent";
+            targetGuest.thankingSentAt = new Date();
+        }
         await workshop.save();
 
         res.json({
