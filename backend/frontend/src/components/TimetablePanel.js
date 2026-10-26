@@ -588,13 +588,14 @@ function TimetablePanel({ currentUser }) {
                 </div>
             )}
 
-            {/* ================= REQUIREMENT 7: ADD / EDIT TIMETABLE ENTRY FORM POSITIONED PROMINENTLY NEAR THE TOP ================= */}
+            {/* ================= REQUIREMENT 3: ADD / EDIT TIMETABLE ENTRY FORM DISPLAYED IN CENTERED MODAL ================= */}
             {showEntryForm && (
-                <div 
-                    ref={formRef}
-                    id="timetable-entry-form-container"
-                    className="bg-slate-900 border-2 border-indigo-500/40 rounded-2xl p-6 shadow-2xl space-y-4 animate-scale-up"
-                >
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div 
+                        ref={formRef}
+                        id="timetable-entry-form-container"
+                        className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4 max-w-xl w-full my-auto max-h-[90vh] overflow-y-auto animate-fade-in"
+                    >
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                         <div className="flex items-center gap-2">
                             <span className="p-2 bg-indigo-600/20 text-indigo-400 rounded-xl text-sm font-bold">
@@ -830,7 +831,8 @@ function TimetablePanel({ currentUser }) {
                         </div>
                     </form>
                 </div>
-            )}
+            </div>
+        )}
 
             {/* KPI Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

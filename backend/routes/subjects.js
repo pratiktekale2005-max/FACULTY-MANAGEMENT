@@ -751,4 +751,263 @@ router.put("/:id/divisions/:divisionId/teaching-plan", authenticateUser, async (
     }
 });
 
-module.exports = router;
+// Helper to recalculate conducted counts from real saved records
+function recalculateSubjectCounts(subject) {
+    const listLecCount = (subject.conductedLecturesList || []).reduce((sum, cl) => sum + (Number(cl.numberOfLectures) || 1), 0);
+    const completedPlannedLec = (subject.lectures || []).filter(l => l.lectureDeliveryStatus === "COMPLETED" || l.status === "completed").length;
+    subject.lecturesConducted = Math.max(listLecCount, completedPlannedLec);
+
+    const listPracCount = (subject.conductedPracticalsList || []).reduce((sum, cp) => sum + (Number(cp.numberOfSessions) || 1), 0);
+    const completedPlannedPrac = (subject.practicals || []).filter(p => p.status === "completed").length;
+    subject.practicalsConducted = Math.max(listPracCount, completedPlannedPrac);
+}
+
+// ================= CONDUCTED LECTURES (ADD, EDIT, DELETE) =================
+// POST /api/subjects/:id/conducted-lectures
+router.post("/:id/conducted-lectures", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { topic, date, numberOfLectures, classOrSemester, lecturePlanReference, remarks } = req.body;
+
+    if (!topic || !topic.trim() || !date) {
+        return res.status(400).json({ error: "Lecture topic and date are required ❌" });
+    }
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        if (!subject.conductedLecturesList) {
+            subject.conductedLecturesList = [];
+        }
+
+        const newLecture = {
+            topic: topic.trim(),
+            date: date.split("T")[0],
+            numberOfLectures: Math.max(1, Number(numberOfLectures) || 1),
+            classOrSemester: classOrSemester || subject.semester || "",
+            lecturePlanReference: lecturePlanReference || "",
+            remarks: remarks || "",
+            conductedBy: req.user._id,
+            conductedByName: req.user.fullName || req.user.name || "Faculty Member"
+        };
+
+        subject.conductedLecturesList.push(newLecture);
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        const addedItem = subject.conductedLecturesList[subject.conductedLecturesList.length - 1];
+        res.json({
+            success: true,
+            message: "Conducted lecture record added successfully! ✅",
+            lecture: addedItem,
+            lecturesConducted: subject.lecturesConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Add conducted lecture error:", err);
+        res.status(500).json({ error: "Failed to add conducted lecture record ❌" });
+    }
+});
+
+// PUT /api/subjects/:id/conducted-lectures/:lectureId
+router.put("/:id/conducted-lectures/:lectureId", authenticateUser, async (req, res) => {
+    const { id, lectureId } = req.params;
+    const { topic, date, numberOfLectures, classOrSemester, lecturePlanReference, remarks } = req.body;
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        const index = (subject.conductedLecturesList || []).findIndex(l => String(l._id) === String(lectureId));
+        if (index === -1) {
+            return res.status(404).json({ error: "Conducted lecture record not found ❌" });
+        }
+
+        if (topic !== undefined) subject.conductedLecturesList[index].topic = topic.trim();
+        if (date !== undefined) subject.conductedLecturesList[index].date = date.split("T")[0];
+        if (numberOfLectures !== undefined) subject.conductedLecturesList[index].numberOfLectures = Math.max(1, Number(numberOfLectures) || 1);
+        if (classOrSemester !== undefined) subject.conductedLecturesList[index].classOrSemester = classOrSemester;
+        if (lecturePlanReference !== undefined) subject.conductedLecturesList[index].lecturePlanReference = lecturePlanReference;
+        if (remarks !== undefined) subject.conductedLecturesList[index].remarks = remarks;
+
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        res.json({
+            success: true,
+            message: "Conducted lecture record updated successfully! ✅",
+            lecture: subject.conductedLecturesList[index],
+            lecturesConducted: subject.lecturesConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Update conducted lecture error:", err);
+        res.status(500).json({ error: "Failed to update conducted lecture record ❌" });
+    }
+});
+
+// DELETE /api/subjects/:id/conducted-lectures/:lectureId
+router.delete("/:id/conducted-lectures/:lectureId", authenticateUser, async (req, res) => {
+    const { id, lectureId } = req.params;
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        subject.conductedLecturesList = (subject.conductedLecturesList || []).filter(l => String(l._id) !== String(lectureId));
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        res.json({
+            success: true,
+            message: "Conducted lecture record deleted! 🗑️",
+            lecturesConducted: subject.lecturesConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Delete conducted lecture error:", err);
+        res.status(500).json({ error: "Failed to delete conducted lecture record ❌" });
+    }
+});
+
+// ================= CONDUCTED PRACTICALS (ADD, EDIT, DELETE) =================
+// POST /api/subjects/:id/conducted-practicals
+router.post("/:id/conducted-practicals", authenticateUser, async (req, res) => {
+    const { id } = req.params;
+    const { practicalNumber, title, date, numberOfSessions, batchOrClass, practicalPlanReference, remarks } = req.body;
+
+    if (!title || !title.trim() || !date) {
+        return res.status(400).json({ error: "Practical title and date are required ❌" });
+    }
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        if (!subject.conductedPracticalsList) {
+            subject.conductedPracticalsList = [];
+        }
+
+        const newPractical = {
+            practicalNumber: practicalNumber || `Exp ${(subject.conductedPracticalsList.length + 1)}`,
+            title: title.trim(),
+            date: date.split("T")[0],
+            numberOfSessions: Math.max(1, Number(numberOfSessions) || 1),
+            batchOrClass: batchOrClass || "",
+            practicalPlanReference: practicalPlanReference || "",
+            remarks: remarks || "",
+            conductedBy: req.user._id,
+            conductedByName: req.user.fullName || req.user.name || "Faculty Member"
+        };
+
+        subject.conductedPracticalsList.push(newPractical);
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        const addedItem = subject.conductedPracticalsList[subject.conductedPracticalsList.length - 1];
+        res.json({
+            success: true,
+            message: "Conducted practical session record added successfully! ✅",
+            practical: addedItem,
+            practicalsConducted: subject.practicalsConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Add conducted practical error:", err);
+        res.status(500).json({ error: "Failed to add conducted practical record ❌" });
+    }
+});
+
+// PUT /api/subjects/:id/conducted-practicals/:practicalId
+router.put("/:id/conducted-practicals/:practicalId", authenticateUser, async (req, res) => {
+    const { id, practicalId } = req.params;
+    const { practicalNumber, title, date, numberOfSessions, batchOrClass, practicalPlanReference, remarks } = req.body;
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        const index = (subject.conductedPracticalsList || []).findIndex(p => String(p._id) === String(practicalId));
+        if (index === -1) {
+            return res.status(404).json({ error: "Conducted practical record not found ❌" });
+        }
+
+        if (practicalNumber !== undefined) subject.conductedPracticalsList[index].practicalNumber = practicalNumber;
+        if (title !== undefined) subject.conductedPracticalsList[index].title = title.trim();
+        if (date !== undefined) subject.conductedPracticalsList[index].date = date.split("T")[0];
+        if (numberOfSessions !== undefined) subject.conductedPracticalsList[index].numberOfSessions = Math.max(1, Number(numberOfSessions) || 1);
+        if (batchOrClass !== undefined) subject.conductedPracticalsList[index].batchOrClass = batchOrClass;
+        if (practicalPlanReference !== undefined) subject.conductedPracticalsList[index].practicalPlanReference = practicalPlanReference;
+        if (remarks !== undefined) subject.conductedPracticalsList[index].remarks = remarks;
+
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        res.json({
+            success: true,
+            message: "Conducted practical record updated successfully! ✅",
+            practical: subject.conductedPracticalsList[index],
+            practicalsConducted: subject.practicalsConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Update conducted practical error:", err);
+        res.status(500).json({ error: "Failed to update conducted practical record ❌" });
+    }
+});
+
+// DELETE /api/subjects/:id/conducted-practicals/:practicalId
+router.delete("/:id/conducted-practicals/:practicalId", authenticateUser, async (req, res) => {
+    const { id, practicalId } = req.params;
+
+    try {
+        const subject = await Subject.findOne({ _id: id, organizationId: req.user.organizationId });
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found or access denied ❌" });
+        }
+        if (req.user.role === "Faculty" && String(subject.userId) !== String(req.user._id)) {
+            return res.status(403).json({ error: "Access denied: you can only manage records for your own assigned subjects ❌" });
+        }
+
+        subject.conductedPracticalsList = (subject.conductedPracticalsList || []).filter(p => String(p._id) !== String(practicalId));
+        recalculateSubjectCounts(subject);
+        await subject.save();
+
+        res.json({
+            success: true,
+            message: "Conducted practical record deleted! 🗑️",
+            practicalsConducted: subject.practicalsConducted,
+            subject
+        });
+    } catch (err) {
+        console.error("Delete conducted practical error:", err);
+        res.status(500).json({ error: "Failed to delete conducted practical record ❌" });
+    }
+});
+
+module.exports = router;

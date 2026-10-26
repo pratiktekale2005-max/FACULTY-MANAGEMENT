@@ -890,7 +890,7 @@ export default function WorkshopLetterModal({
                                 {/* Leadership Information Banner */}
                                 <div className="flex justify-between items-center text-[9px] font-sans font-semibold text-slate-700 border-b border-slate-300 pb-1.5 mb-4">
                                     <div>
-                                        <span className="font-bold text-slate-900">Dr. Adsul Mam</span>
+                                        <span className="font-bold text-slate-900">Dr. Alpana Adsul</span>
                                         <span className="text-slate-600"> | Vice Principal / CE - HOD</span>
                                     </div>
                                     <div>
@@ -983,7 +983,7 @@ export default function WorkshopLetterModal({
                                         </div>
                                         <div className="text-center">
                                             <div className="h-10"></div>
-                                            <div className="font-bold border-t border-slate-400 pt-1 px-4">Dr. Adsul Mam</div>
+                                            <div className="font-bold border-t border-slate-400 pt-1 px-4">Dr. Alpana Adsul</div>
                                             <div className="text-[10px] text-slate-600">Vice Principal / CE - HOD</div>
                                         </div>
                                         <div className="text-center">

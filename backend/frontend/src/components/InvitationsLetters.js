@@ -54,7 +54,7 @@ function InvitationsLetters({ currentUser }) {
     const [registerForm, setRegisterForm] = useState(initialRegisterForm);
 
     // Dynamic sender details based on logged-in user (Section 2 & 6)
-    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Adsul Mam" : "Faculty Member");
+    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Alpana Adsul" : "Faculty Member");
     const senderDesignation = isPrincipal 
         ? "Principal" 
         : isHOD 
@@ -1123,7 +1123,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 {/* Leadership Information Banner */}
                                 <div className="flex justify-between items-center text-[9.5px] font-sans font-semibold text-slate-700 border-b border-slate-300 pb-1.5 mb-2">
                                     <div>
-                                        <span className="font-bold text-slate-900">Dr. Adsul Mam</span>
+                                        <span className="font-bold text-slate-900">Dr. Alpana Adsul</span>
                                         <span className="text-slate-600"> | Vice Principal / CE - HOD</span>
                                     </div>
                                     <div>
@@ -1306,7 +1306,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                         </div>
                                         <div className="space-y-1">
                                             <div className="w-24 h-8 border-b border-dashed border-slate-400 mx-auto mb-1"></div>
-                                            <p className="font-bold text-slate-900">Dr. Adsul Mam</p>
+                                            <p className="font-bold text-slate-900">Dr. Alpana Adsul</p>
                                             <p className="text-[10px] text-slate-600">Vice Principal / CE - HOD</p>
                                             <p className="text-[9px] text-slate-500">Dept. of {senderDept}</p>
                                         </div>

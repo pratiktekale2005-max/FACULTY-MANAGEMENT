@@ -697,7 +697,7 @@ const sendOfficialLetterEmail = async ({
         });
 
         const senderRole = sender.role || "Faculty";
-        const senderName = sender.name || (senderRole === "Principal" ? "Dr. Suresh Mali" : (senderRole === "HOD" ? "Dr. Adsul Mam" : "Faculty Member"));
+        const senderName = sender.name || (senderRole === "Principal" ? "Dr. Suresh Mali" : (senderRole === "HOD" ? "Dr. Alpana Adsul" : "Faculty Member"));
         const senderDesignation = senderRole === "Faculty"
             ? "Faculty"
             : senderRole === "HOD"
@@ -727,7 +727,7 @@ const sendOfficialLetterEmail = async ({
                         <p style="margin: 0; font-size: 10px; font-weight: 600; color: #475569;">(An Autonomous Institute Affiliated to SPPU • NAAC 'A' Grade Accredited)</p>
                         <p style="margin: 3px 0 0 0; font-size: 9px; color: #64748b;">Varale Campus, Talegaon, Pune • Ph: 020 48522561 • www.dypcoei.edu.in</p>
                         <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0; font-size: 9.5px; color: #1e1b4b; display: flex; justify-content: space-between;">
-                            <span><strong>Dr. Adsul Mam</strong> (Vice Principal / CE - HOD)</span>
+                            <span><strong>Dr. Alpana Adsul</strong> (Vice Principal / CE - HOD)</span>
                             <span style="float: right;"><strong>Dr. Suresh Mali</strong> (Principal)</span>
                             <div style="clear: both;"></div>
                         </div>

@@ -57,6 +57,30 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
     const [selectedDivision, setSelectedDivision] = useState(null);
 
+    // Conducted Activities States
+    const [showAddConductedLectureModal, setShowAddConductedLectureModal] = useState(false);
+    const [editingConductedLecture, setEditingConductedLecture] = useState(null);
+    const [conductedLectureForm, setConductedLectureForm] = useState({
+        topic: "",
+        date: new Date().toISOString().split("T")[0],
+        numberOfLectures: 1,
+        classOrSemester: "",
+        lecturePlanReference: "",
+        remarks: ""
+    });
+
+    const [showAddConductedPracticalModal, setShowAddConductedPracticalModal] = useState(false);
+    const [editingConductedPractical, setEditingConductedPractical] = useState(null);
+    const [conductedPracticalForm, setConductedPracticalForm] = useState({
+        practicalNumber: 1,
+        title: "",
+        date: new Date().toISOString().split("T")[0],
+        numberOfSessions: 1,
+        batchOrClass: "",
+        practicalPlanReference: "",
+        remarks: ""
+    });
+
     const [teachingPlanEditable, setTeachingPlanEditable] = useState([]);
     const [lecturesPlanEditable, setLecturesPlanEditable] = useState([]);
     const [planSubTab, setPlanSubTab] = useState("weekly"); // weekly | lectures
@@ -379,6 +403,160 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
         }
     };
 
+    const canManageSubject = currentUser.role === "Faculty" || currentUser.role === "HOD" || (currentUser.role === "Principal" && activeSubject?.assignedFacultyId === currentUser.id);
+
+    const handleOpenAddConductedLecture = () => {
+        setEditingConductedLecture(null);
+        setConductedLectureForm({
+            topic: "",
+            date: new Date().toISOString().split("T")[0],
+            numberOfLectures: 1,
+            classOrSemester: activeSubject?.semester || "",
+            lecturePlanReference: "",
+            remarks: ""
+        });
+        setShowAddConductedLectureModal(true);
+    };
+
+    const handleOpenEditConductedLecture = (lec) => {
+        setEditingConductedLecture(lec);
+        setConductedLectureForm({
+            topic: lec.topic || "",
+            date: lec.date ? lec.date.split("T")[0] : new Date().toISOString().split("T")[0],
+            numberOfLectures: lec.numberOfLectures || 1,
+            classOrSemester: lec.classOrSemester || activeSubject?.semester || "",
+            lecturePlanReference: lec.lecturePlanReference || "",
+            remarks: lec.remarks || ""
+        });
+        setShowAddConductedLectureModal(true);
+    };
+
+    const handleSaveConductedLecture = async (e) => {
+        e.preventDefault();
+        if (!conductedLectureForm.topic.trim()) {
+            alert("Please enter the lecture topic.");
+            return;
+        }
+        if (!conductedLectureForm.date) {
+            alert("Please enter the lecture date.");
+            return;
+        }
+        try {
+            let res;
+            if (editingConductedLecture) {
+                res = await api.put(`/subjects/${activeSubject._id}/conducted-lectures/${editingConductedLecture._id}`, conductedLectureForm);
+            } else {
+                res = await api.post(`/subjects/${activeSubject._id}/conducted-lectures`, conductedLectureForm);
+            }
+            setShowAddConductedLectureModal(false);
+            setEditingConductedLecture(null);
+            if (res && res.subject) {
+                setActiveSubject(res.subject);
+            }
+            await loadSubjects();
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            console.error("Failed to save conducted lecture:", err);
+            alert(err.message || "Failed to save conducted lecture ❌");
+        }
+    };
+
+    const handleDeleteConductedLecture = async (lectureId) => {
+        if (!window.confirm("Are you sure you want to delete this conducted lecture record?")) return;
+        try {
+            const res = await api.delete(`/subjects/${activeSubject._id}/conducted-lectures/${lectureId}`);
+            if (res && res.subject) {
+                setActiveSubject(res.subject);
+            }
+            await loadSubjects();
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            console.error("Failed to delete conducted lecture:", err);
+            alert(err.message || "Failed to delete conducted lecture ❌");
+        }
+    };
+
+    const handleOpenAddConductedPractical = () => {
+        setEditingConductedPractical(null);
+        const nextNum = (activeSubject?.conductedPracticalsList?.length || 0) + 1;
+        setConductedPracticalForm({
+            practicalNumber: nextNum,
+            title: "",
+            date: new Date().toISOString().split("T")[0],
+            numberOfSessions: 1,
+            batchOrClass: "Batch A",
+            practicalPlanReference: "",
+            remarks: ""
+        });
+        setShowAddConductedPracticalModal(true);
+    };
+
+    const handleOpenEditConductedPractical = (prac) => {
+        setEditingConductedPractical(prac);
+        setConductedPracticalForm({
+            practicalNumber: prac.practicalNumber || 1,
+            title: prac.title || "",
+            date: prac.date ? prac.date.split("T")[0] : new Date().toISOString().split("T")[0],
+            numberOfSessions: prac.numberOfSessions || 1,
+            batchOrClass: prac.batchOrClass || "",
+            practicalPlanReference: prac.practicalPlanReference || "",
+            remarks: prac.remarks || ""
+        });
+        setShowAddConductedPracticalModal(true);
+    };
+
+    const handleSaveConductedPractical = async (e) => {
+        e.preventDefault();
+        if (!conductedPracticalForm.title.trim()) {
+            alert("Please enter practical title / experiment name.");
+            return;
+        }
+        if (!conductedPracticalForm.date) {
+            alert("Please enter practical date.");
+            return;
+        }
+        try {
+            let res;
+            if (editingConductedPractical) {
+                res = await api.put(`/subjects/${activeSubject._id}/conducted-practicals/${editingConductedPractical._id}`, conductedPracticalForm);
+            } else {
+                res = await api.post(`/subjects/${activeSubject._id}/conducted-practicals`, conductedPracticalForm);
+            }
+            setShowAddConductedPracticalModal(false);
+            setEditingConductedPractical(null);
+            if (res && res.subject) {
+                setActiveSubject(res.subject);
+            }
+            await loadSubjects();
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            console.error("Failed to save conducted practical:", err);
+            alert(err.message || "Failed to save conducted practical ❌");
+        }
+    };
+
+    const handleDeleteConductedPractical = async (practicalId) => {
+        if (!window.confirm("Are you sure you want to delete this conducted practical record?")) return;
+        try {
+            const res = await api.delete(`/subjects/${activeSubject._id}/conducted-practicals/${practicalId}`);
+            if (res && res.subject) {
+                setActiveSubject(res.subject);
+            }
+            await loadSubjects();
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            console.error("Failed to delete conducted practical:", err);
+            alert(err.message || "Failed to delete conducted practical ❌");
+        }
+    };
+
+    // Calculate real dynamic summaries directly from database records
+    const totalLecturesConducted = subjects.reduce((acc, s) => acc + (s.lecturesConducted || (s.conductedLecturesList ? s.conductedLecturesList.length : 0)), 0);
+    const totalPracticalsConducted = subjects.reduce((acc, s) => acc + (s.practicalsConducted || (s.conductedPracticalsList ? s.conductedPracticalsList.length : 0)), 0);
+    const totalLecturesPlanned = subjects.reduce((acc, s) => acc + (s.lecturesPlanned || 0), 0);
+    const totalPracticalsPlanned = subjects.reduce((acc, s) => acc + (s.practicalsPlanned || 0), 0);
+    const totalSubjectsCount = subjects.length;
+
     return (
         <div className="space-y-6">
             
@@ -387,7 +565,7 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                 <div className="w-full md:w-auto">
                     <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Green Book Academic Management</h2>
                     <p className="text-xs text-slate-400 mt-1">
-                        {currentUser.role === "Principal" ? "Steer and track academic progress metrics." : "Add subjects, checklist syllabus milestones, and enroll student lists."}
+                        {currentUser.role === "Principal" ? "Steer and track academic progress metrics across departments." : "Manage subjects, syllabus plans, conducted lectures & practicals, and student rosters."}
                     </p>
                 </div>
 
@@ -419,6 +597,69 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                     )}
                 </div>
             </div>
+
+            {/* ================= GREEN BOOK TOP SUMMARY BAR ================= */}
+            {!activeSubject && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+                    <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Subjects</span>
+                            <span className="text-2xl font-black text-white mt-1 block">{totalSubjectsCount}</span>
+                            <span className="text-[10px] text-slate-500 mt-0.5 block">Active Curriculum Courses</span>
+                        </div>
+                        <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xl">
+                            📚
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Lectures Conducted</span>
+                            <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                                {totalLecturesConducted} <span className="text-xs font-semibold text-slate-400">/ {totalLecturesPlanned}</span>
+                            </span>
+                            <span className="text-[10px] text-emerald-400/80 mt-0.5 block">
+                                {totalLecturesPlanned > 0 ? `${Math.round((totalLecturesConducted / totalLecturesPlanned) * 100)}% Syllabus Delivered` : "Real-time records"}
+                            </span>
+                        </div>
+                        <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl">
+                            👨‍🏫
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Practicals Conducted</span>
+                            <span className="text-2xl font-black text-cyan-400 mt-1 block">
+                                {totalPracticalsConducted} <span className="text-xs font-semibold text-slate-400">/ {totalPracticalsPlanned}</span>
+                            </span>
+                            <span className="text-[10px] text-cyan-400/80 mt-0.5 block">
+                                {totalPracticalsPlanned > 0 ? `${Math.round((totalPracticalsConducted / totalPracticalsPlanned) * 100)}% Lab Sessions Completed` : "Lab batches"}
+                            </span>
+                        </div>
+                        <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-xl">
+                            🔬
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/70 border border-slate-800 p-4 rounded-2xl shadow-sm flex flex-col justify-between">
+                        <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Subject-wise Records</span>
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                {subjects.slice(0, 3).map(s => (
+                                    <span key={s._id} className="text-[9px] bg-slate-950 border border-slate-800 text-slate-350 px-2 py-0.5 rounded font-mono font-medium">
+                                        {s.subjectCode}: {s.lecturesConducted || (s.conductedLecturesList ? s.conductedLecturesList.length : 0)}L / {s.practicalsConducted || (s.conductedPracticalsList ? s.conductedPracticalsList.length : 0)}P
+                                    </span>
+                                ))}
+                                {subjects.length > 3 && (
+                                    <span className="text-[9px] text-slate-500 self-center">+{subjects.length - 3} more</span>
+                                )}
+                            </div>
+                        </div>
+                        <span className="text-[9px] text-indigo-400 font-semibold mt-2">Calculated from verified database records</span>
+                    </div>
+                </div>
+            )}
 
             {/* ================= INJECT: ADD SUBJECT FORM ================= */}
             {showAddForm && !activeSubject && (
@@ -768,63 +1009,257 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                         </div>
 
                         {/* Tracker Sub-Tabs */}
-                        {!activeSubject.hasDivision && (
-                            <div className="flex flex-wrap gap-1 bg-slate-950 p-1 border border-slate-850 rounded-xl">
-                                {["lectures", "practicals", "plan", "students"].map(tab => {
-                                    if (tab === "practicals" && activeSubject.practicalsPlanned === 0) return null;
-                                    return (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setDetailTab(tab)}
-                                            className={`px-3.5 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all ${detailTab === tab ? "bg-indigo-600 text-white shadow" : "text-slate-400 hover:text-slate-200"}`}
-                                        >
-                                            {tab}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        <div className="flex flex-wrap gap-1 bg-slate-950 p-1 border border-slate-850 rounded-xl">
+                            {[
+                                { id: "conducted-lectures", label: "Lectures Conducted", count: activeSubject.conductedLecturesList?.length || activeSubject.lecturesConducted || 0 },
+                                { id: "conducted-practicals", label: "Practicals Conducted", count: activeSubject.conductedPracticalsList?.length || activeSubject.practicalsConducted || 0 },
+                                { id: "lectures", label: "Planned Lectures", count: activeSubject.lectures?.length || activeSubject.lecturesPlanned || 0 },
+                                { id: "practicals", label: "Planned Practicals", count: activeSubject.practicals?.length || activeSubject.practicalsPlanned || 0 },
+                                { id: "plan", label: "Teaching Plan" },
+                                { id: "students", label: "Students", count: activeSubject.students?.length || 0 },
+                                ...(activeSubject.hasDivision ? [{ id: "divisions", label: "Divisions", count: activeSubject.divisionList?.length || 0 }] : [])
+                            ].map(tabItem => (
+                                <button
+                                    key={tabItem.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setDetailTab(tabItem.id);
+                                        if (tabItem.id !== "divisions") setSelectedDivision(null);
+                                    }}
+                                    className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all flex items-center gap-1.5 ${
+                                        detailTab === tabItem.id 
+                                            ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30" 
+                                            : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+                                    }`}
+                                >
+                                    <span>{tabItem.label}</span>
+                                    {tabItem.count !== undefined && (
+                                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                                            detailTab === tabItem.id ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                                        }`}>
+                                            {tabItem.count}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="p-6">
-                        {activeSubject.hasDivision ? (
-                            selectedDivision ? (
-                                <DivisionManagementCard
-                                    subject={activeSubject}
-                                    divisionId={selectedDivision}
-                                    currentUser={currentUser}
-                                    onRefresh={loadSubjects}
-                                />
-                            ) : (
-                                <div className="space-y-4">
-                                    <h4 className="text-xs font-bold text-slate-450 uppercase tracking-wider">Division Management Sections</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                                        {activeSubject.divisionList.map(div => {
-                                            const divStuds = (activeSubject.students || []).filter(st => st.division === div);
-                                            return (
-                                                <div 
-                                                    key={div}
-                                                    onClick={() => setSelectedDivision(div)}
-                                                    className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl cursor-pointer hover:border-indigo-500/40 transition-all flex flex-col justify-between group hover:-translate-y-0.5"
-                                                >
-                                                    <div>
-                                                        <h4 className="text-sm font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">Division {div}</h4>
-                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-1">Section Profile</span>
-                                                        <p className="text-[10px] text-slate-400 mt-4 font-semibold">Students Enlisted: {divStuds.length}</p>
-                                                    </div>
-                                                    <button className="mt-6 w-full py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-semibold text-[10px] rounded-lg transition-colors">
-                                                        Inspect Section {div}
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
+                        {/* ================= 1. CONDUCTED LECTURES SECTION ================= */}
+                        {detailTab === "conducted-lectures" && (
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                            <span>👨‍🏫 Conducted Lectures Records</span>
+                                            <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-bold">
+                                                Total Conducted: {activeSubject.conductedLecturesList?.length || activeSubject.lecturesConducted || 0}
+                                            </span>
+                                        </h4>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                            Real delivered class records saved in database with topic, date, hours, and syllabus coverage.
+                                        </p>
                                     </div>
+                                    {canManageSubject && (
+                                        <button
+                                            type="button"
+                                            onClick={handleOpenAddConductedLecture}
+                                            className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition shadow flex items-center gap-1.5"
+                                        >
+                                            <span>➕</span>
+                                            <span>Add Conducted Lecture</span>
+                                        </button>
+                                    )}
                                 </div>
-                            )
-                        ) : (
-                            <>
-                                {/* 1. LECTURES SUBTAB */}
-                                {detailTab === "lectures" && (
+
+                                {(!activeSubject.conductedLecturesList || activeSubject.conductedLecturesList.length === 0) ? (
+                                    <div className="text-center py-12 text-slate-500 italic text-xs bg-slate-950/40 rounded-2xl border border-slate-850">
+                                        <p>No conducted lectures logged yet for this subject.</p>
+                                        {canManageSubject && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenAddConductedLecture}
+                                                className="mt-3 px-3.5 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition"
+                                            >
+                                                + Log First Conducted Lecture
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                                <tr className="border-b border-slate-800 bg-slate-950/40 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                                    <th className="py-2.5 px-3 w-12 text-center">#</th>
+                                                    <th className="py-2.5 px-3">Subject / Course</th>
+                                                    <th className="py-2.5 px-3">Lecture Topic Delivered</th>
+                                                    <th className="py-2.5 px-3 w-28">Date</th>
+                                                    <th className="py-2.5 px-3 w-20 text-center">Lectures</th>
+                                                    <th className="py-2.5 px-3 w-28">Class / Sem</th>
+                                                    <th className="py-2.5 px-3">Plan Reference</th>
+                                                    <th className="py-2.5 px-3">Remarks</th>
+                                                    {canManageSubject && <th className="py-2.5 px-3 w-28 text-right">Actions</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-850/60 text-slate-300">
+                                                {activeSubject.conductedLecturesList.map((lec, index) => (
+                                                    <tr key={lec._id || index} className="hover:bg-slate-800/20 transition-colors">
+                                                        <td className="py-2.5 px-3 text-center font-mono text-slate-500 font-bold">{index + 1}</td>
+                                                        <td className="py-2.5 px-3">
+                                                            <span className="font-semibold text-white block">{activeSubject.subjectName}</span>
+                                                            <span className="text-[10px] text-slate-500 font-mono">{activeSubject.subjectCode}</span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 font-medium text-slate-100">{lec.topic}</td>
+                                                        <td className="py-2.5 px-3 font-mono text-emerald-400">{lec.date}</td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 text-[10px] font-bold">
+                                                                {lec.numberOfLectures || 1}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-slate-400 text-[11px]">{lec.classOrSemester || activeSubject.semester}</td>
+                                                        <td className="py-2.5 px-3 text-slate-400 text-[11px]">{lec.lecturePlanReference || "-"}</td>
+                                                        <td className="py-2.5 px-3 text-slate-400 text-[11px] italic">{lec.remarks || "-"}</td>
+                                                        {canManageSubject && (
+                                                            <td className="py-2.5 px-3 text-right">
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenEditConductedLecture(lec)}
+                                                                        className="px-2 py-1 text-[10px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded transition"
+                                                                        title="Edit conducted lecture"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteConductedLecture(lec._id)}
+                                                                        className="px-2 py-1 text-[10px] font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded transition"
+                                                                        title="Delete record"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ================= 2. CONDUCTED PRACTICALS SECTION ================= */}
+                        {detailTab === "conducted-practicals" && (
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                            <span>🔬 Conducted Practicals & Lab Sessions</span>
+                                            <span className="text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded font-bold">
+                                                Total Conducted: {activeSubject.conductedPracticalsList?.length || activeSubject.practicalsConducted || 0}
+                                            </span>
+                                        </h4>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                            Real conducted laboratory sessions saved in database with experiment title, batch, and references.
+                                        </p>
+                                    </div>
+                                    {canManageSubject && (
+                                        <button
+                                            type="button"
+                                            onClick={handleOpenAddConductedPractical}
+                                            className="px-3.5 py-1.5 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 rounded-xl transition shadow flex items-center gap-1.5"
+                                        >
+                                            <span>➕</span>
+                                            <span>Add Conducted Practical</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {(!activeSubject.conductedPracticalsList || activeSubject.conductedPracticalsList.length === 0) ? (
+                                    <div className="text-center py-12 text-slate-500 italic text-xs bg-slate-950/40 rounded-2xl border border-slate-850">
+                                        <p>No conducted practical sessions logged yet for this subject.</p>
+                                        {canManageSubject && (
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenAddConductedPractical}
+                                                className="mt-3 px-3.5 py-1.5 text-xs font-medium text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded-lg transition"
+                                            >
+                                                + Log First Practical Session
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                                        <table className="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                                <tr className="border-b border-slate-800 bg-slate-950/40 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                                    <th className="py-2.5 px-3 w-16 text-center">Exp #</th>
+                                                    <th className="py-2.5 px-3">Subject</th>
+                                                    <th className="py-2.5 px-3">Practical / Experiment Name</th>
+                                                    <th className="py-2.5 px-3 w-28">Date</th>
+                                                    <th className="py-2.5 px-3 w-20 text-center">Sessions</th>
+                                                    <th className="py-2.5 px-3 w-24">Batch / Class</th>
+                                                    <th className="py-2.5 px-3">Plan Reference</th>
+                                                    <th className="py-2.5 px-3">Remarks</th>
+                                                    {canManageSubject && <th className="py-2.5 px-3 w-28 text-right">Actions</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-850/60 text-slate-300">
+                                                {activeSubject.conductedPracticalsList.map((prac, index) => (
+                                                    <tr key={prac._id || index} className="hover:bg-slate-800/20 transition-colors">
+                                                        <td className="py-2.5 px-3 text-center font-mono text-cyan-400 font-bold">
+                                                            #{prac.practicalNumber || index + 1}
+                                                        </td>
+                                                        <td className="py-2.5 px-3">
+                                                            <span className="font-semibold text-white block">{activeSubject.subjectName}</span>
+                                                            <span className="text-[10px] text-slate-500 font-mono">{activeSubject.subjectCode}</span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 font-medium text-slate-100">{prac.title}</td>
+                                                        <td className="py-2.5 px-3 font-mono text-cyan-400">{prac.date}</td>
+                                                        <td className="py-2.5 px-3 text-center">
+                                                            <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 text-[10px] font-bold">
+                                                                {prac.numberOfSessions || 1}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2.5 px-3 text-slate-300 text-[11px] font-semibold">{prac.batchOrClass || "All"}</td>
+                                                        <td className="py-2.5 px-3 text-slate-400 text-[11px]">{prac.practicalPlanReference || "-"}</td>
+                                                        <td className="py-2.5 px-3 text-slate-400 text-[11px] italic">{prac.remarks || "-"}</td>
+                                                        {canManageSubject && (
+                                                            <td className="py-2.5 px-3 text-right">
+                                                                <div className="flex items-center justify-end gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleOpenEditConductedPractical(prac)}
+                                                                        className="px-2 py-1 text-[10px] font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded transition"
+                                                                        title="Edit conducted practical"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteConductedPractical(prac._id)}
+                                                                        className="px-2 py-1 text-[10px] font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded transition"
+                                                                        title="Delete record"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ================= 3. PLANNED LECTURES SUBTAB ================= */}
+                        {detailTab === "lectures" && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
                                     <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Planned vs Conducted Lectures Logs</h4>
@@ -1328,9 +1763,46 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                 </div>
                             </div>
                         )}
-                            </>
-                        )
-                    }
+
+                        {/* ================= 7. DIVISIONS SUBTAB ================= */}
+                        {activeSubject.hasDivision && detailTab === "divisions" && (
+                            selectedDivision ? (
+                                <DivisionManagementCard
+                                    subject={activeSubject}
+                                    divisionId={selectedDivision}
+                                    currentUser={currentUser}
+                                    onRefresh={loadSubjects}
+                                />
+                            ) : (
+                                <div className="space-y-4">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Division Management Sections</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                        {activeSubject.divisionList.map(div => {
+                                            const divStuds = (activeSubject.students || []).filter(st => st.division === div);
+                                            return (
+                                                <div 
+                                                    key={div}
+                                                    onClick={() => setSelectedDivision(div)}
+                                                    className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl cursor-pointer hover:border-indigo-500/40 transition-all flex flex-col justify-between group hover:-translate-y-0.5"
+                                                >
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">Division {div}</h4>
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mt-1">Section Profile</span>
+                                                        <p className="text-[10px] text-slate-400 mt-4 font-semibold">Students Enlisted: {divStuds.length}</p>
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        className="mt-6 w-full py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-semibold text-[10px] rounded-lg transition-colors"
+                                                    >
+                                                        Inspect Section {div}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        )}
                     </div>
                 </div>
             )}
@@ -1436,6 +1908,278 @@ function GreenBookPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
                                 Save Attributes
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ================= ADD / EDIT CONDUCTED LECTURE MODAL ================= */}
+            {showAddConductedLectureModal && (
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="max-w-lg w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl relative my-8 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <span>👨‍🏫</span>
+                                    <span>{editingConductedLecture ? "Edit Conducted Lecture" : "Log Conducted Lecture"}</span>
+                                </h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Course: <span className="text-indigo-400 font-bold">{activeSubject?.subjectName} ({activeSubject?.subjectCode})</span>
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setShowAddConductedLectureModal(false); setEditingConductedLecture(null); }}
+                                className="text-slate-400 hover:text-white p-1 rounded-lg text-lg leading-none"
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveConductedLecture} className="space-y-3.5">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                    Lecture Topic Conducted *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={conductedLectureForm.topic}
+                                    onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, topic: e.target.value })}
+                                    placeholder="e.g. Relational Calculus and Tuple Calculus Queries"
+                                    className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Conducted Date *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={conductedLectureForm.date}
+                                        onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, date: e.target.value })}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Number of Lectures *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="6"
+                                        required
+                                        value={conductedLectureForm.numberOfLectures}
+                                        onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, numberOfLectures: parseInt(e.target.value) || 1 })}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Class / Semester
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={conductedLectureForm.classOrSemester}
+                                        onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, classOrSemester: e.target.value })}
+                                        placeholder="e.g. Odd Semester / TE-A"
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Lecture Plan Reference
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={conductedLectureForm.lecturePlanReference}
+                                        onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, lecturePlanReference: e.target.value })}
+                                        placeholder="e.g. Unit 3 - Lecture 12 Plan"
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                    Remarks / Notes (Optional)
+                                </label>
+                                <textarea
+                                    rows="2"
+                                    value={conductedLectureForm.remarks}
+                                    onChange={(e) => setConductedLectureForm({ ...conductedLectureForm, remarks: e.target.value })}
+                                    placeholder="e.g. Completed with whiteboard problem solving exercise"
+                                    className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAddConductedLectureModal(false); setEditingConductedLecture(null); }}
+                                    className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-md transition"
+                                >
+                                    {editingConductedLecture ? "Update Lecture Record" : "Save Conducted Lecture"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ================= ADD / EDIT CONDUCTED PRACTICAL MODAL ================= */}
+            {showAddConductedPracticalModal && (
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="max-w-lg w-full bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl relative my-8 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <div>
+                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <span>🔬</span>
+                                    <span>{editingConductedPractical ? "Edit Conducted Practical" : "Log Conducted Practical"}</span>
+                                </h3>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Course: <span className="text-cyan-400 font-bold">{activeSubject?.subjectName} ({activeSubject?.subjectCode})</span>
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setShowAddConductedPracticalModal(false); setEditingConductedPractical(null); }}
+                                className="text-slate-400 hover:text-white p-1 rounded-lg text-lg leading-none"
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSaveConductedPractical} className="space-y-3.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div className="sm:col-span-1 flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Exp No. *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        required
+                                        value={conductedPracticalForm.practicalNumber}
+                                        onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, practicalNumber: parseInt(e.target.value) || 1 })}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500 font-mono"
+                                    />
+                                </div>
+
+                                <div className="sm:col-span-3 flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Practical Title / Experiment Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={conductedPracticalForm.title}
+                                        onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, title: e.target.value })}
+                                        placeholder="e.g. Design and Implementation of ER Model using SQL DDL"
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Date *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={conductedPracticalForm.date}
+                                        onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, date: e.target.value })}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Sessions Count
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="6"
+                                        required
+                                        value={conductedPracticalForm.numberOfSessions}
+                                        onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, numberOfSessions: parseInt(e.target.value) || 1 })}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                        Batch / Class
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={conductedPracticalForm.batchOrClass}
+                                        onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, batchOrClass: e.target.value })}
+                                        placeholder="e.g. Batch A"
+                                        className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                    Practical Plan Reference
+                                </label>
+                                <input
+                                    type="text"
+                                    value={conductedPracticalForm.practicalPlanReference}
+                                    onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, practicalPlanReference: e.target.value })}
+                                    placeholder="e.g. Lab Manual Assignment 3 / SPPU Curriculum"
+                                    className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                                <label className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                                    Remarks / Notes (Optional)
+                                </label>
+                                <textarea
+                                    rows="2"
+                                    value={conductedPracticalForm.remarks}
+                                    onChange={(e) => setConductedPracticalForm({ ...conductedPracticalForm, remarks: e.target.value })}
+                                    placeholder="e.g. Verified execution on MySQL server; 100% batch attendance"
+                                    className="bg-slate-950 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowAddConductedPracticalModal(false); setEditingConductedPractical(null); }}
+                                    className="px-4 py-2 text-xs text-slate-400 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-500 rounded-xl shadow-md transition"
+                                >
+                                    {editingConductedPractical ? "Update Practical Record" : "Save Conducted Practical"}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
