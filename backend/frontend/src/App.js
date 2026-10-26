@@ -3,6 +3,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Onboarding from "./pages/Onboarding";
 
+function App() {
   const [step, setStep] = useState(() => {
     try {
       const savedUser = localStorage.getItem("crm_user");
