@@ -180,14 +180,14 @@ body {
   background: rgba(0, 0, 0, 0.3);
 }
 
-/* Animations without lingering transform containment */
+/* Animations without transform containment for proper fixed modal positioning */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fadeIn 0.2s ease-out both;
 }
 
 /* Unified styling helper utilities */
@@ -994,4 +994,20 @@ body.light-theme {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 0.75rem;
+}
+
+/* Ensure select dropdown options and popup menus are never clipped */
+select option {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+}
+
+.light-theme select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Ensure modal overlays always cover the viewport cleanly */
+div[class*="fixed inset-0"] {
+  position: fixed !important;
 }

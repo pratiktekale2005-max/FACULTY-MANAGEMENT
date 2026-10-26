@@ -54,7 +54,7 @@ function InvitationsLetters({ currentUser }) {
     const [registerForm, setRegisterForm] = useState(initialRegisterForm);
 
     // Dynamic sender details based on logged-in user (Section 2 & 6)
-    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Adsul Mam" : "Faculty Member");
+    const senderName = currentUser?.fullName || currentUser?.name || (isPrincipal ? "Dr. Suresh Mali" : isHOD ? "Dr. Alpana Adsul" : "Faculty Member");
     const senderDesignation = isPrincipal 
         ? "Principal" 
         : isHOD 
@@ -1123,7 +1123,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                 {/* Leadership Information Banner */}
                                 <div className="flex justify-between items-center text-[9.5px] font-sans font-semibold text-slate-700 border-b border-slate-300 pb-1.5 mb-2">
                                     <div>
-                                        <span className="font-bold text-slate-900">Dr. Adsul Mam</span>
+                                        <span className="font-bold text-slate-900">Dr. Alpana Adsul</span>
                                         <span className="text-slate-600"> | Vice Principal / CE - HOD</span>
                                     </div>
                                     <div>
@@ -1306,7 +1306,7 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
                                         </div>
                                         <div className="space-y-1">
                                             <div className="w-24 h-8 border-b border-dashed border-slate-400 mx-auto mb-1"></div>
-                                            <p className="font-bold text-slate-900">Dr. Adsul Mam</p>
+                                            <p className="font-bold text-slate-900">Dr. Alpana Adsul</p>
                                             <p className="text-[10px] text-slate-600">Vice Principal / CE - HOD</p>
                                             <p className="text-[9px] text-slate-500">Dept. of {senderDept}</p>
                                         </div>
@@ -1755,8 +1755,8 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
 
             {/* CREATE / EDIT REGISTER MODAL */}
             {registerModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-auto max-h-[92vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
@@ -1967,8 +1967,8 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
 
             {/* VIEW REGISTER RECORD MODAL */}
             {viewRegisterModal && (
-                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <span className="text-[9px] uppercase font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
@@ -2063,8 +2063,8 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
 
             {/* SEND EMAIL MODAL */}
             {emailModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                                 <span>✉️ Send Official Letter via Email</span>
@@ -2117,8 +2117,8 @@ The Department of ${senderDept} hereby intimates all concerned stakeholders rega
 
             {/* DETAIL MODAL */}
             {viewDetailModal && (
-                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-[#121826] border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-sm font-bold text-slate-100">{viewDetailModal.subject}</h3>

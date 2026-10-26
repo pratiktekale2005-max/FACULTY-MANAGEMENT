@@ -1411,8 +1411,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
             {/* ================= MODAL: WORKSHOP REPORT (Requirement #1: Exact Sequence) ================= */}
             {reportModalWorkshop && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6 animate-scale-up text-xs">
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6 animate-scale-up text-xs my-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -1705,8 +1705,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
             {/* ================= MODAL: VIEW ALL DETAILS (Requirement #8) ================= */}
             {detailsModalWorkshop && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs my-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -1822,8 +1822,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
             {/* ================= MODAL: EDIT / REGISTER WORKSHOP (Requirement #9: Zero Scrolling Popup) ================= */}
             {(showAddModal || editModalWorkshop) && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs">
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up text-xs my-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                                 <span>📝</span>
@@ -2013,8 +2013,8 @@ function WorkshopsPanel({ currentUser, refreshTrigger, onRefresh, onSelectFacult
 
             {/* ================= MODAL: REMUNERATION PDF REPORT PREVIEW ================= */}
             {remunPdfData && ReactDOM.createPortal(
-                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 animate-scale-up text-xs">
+                <div className="fixed inset-0 bg-slate-950/85 flex items-center justify-center z-[99999] p-4 backdrop-blur-sm overflow-y-auto">
+                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 animate-scale-up text-xs my-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                                 <span>📄</span>

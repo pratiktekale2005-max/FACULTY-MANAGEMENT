@@ -308,6 +308,11 @@ function ApprovalCenter({ currentUser }) {
                                         onClick={() => {
                                             setSelectedApp(a);
                                             setRemarks("");
+                                            if (window.innerWidth < 1024) {
+                                                setTimeout(() => {
+                                                    document.getElementById("approval-inspection-drawer")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                                }, 60);
+                                            }
                                         }}
                                         className={`p-4 bg-slate-950/40 hover:bg-slate-900/60 border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer transition-all ${
                                             isSelected ? "border-indigo-500 shadow-md shadow-indigo-500/10 bg-slate-900/60" : "border-slate-800/80"
@@ -392,7 +397,7 @@ function ApprovalCenter({ currentUser }) {
                 </div>
 
                 {/* Inspect Details Column (Right Side) */}
-                <div className="bg-[#101622] border border-slate-800 rounded-2xl p-5 space-y-5 shadow-lg min-h-[350px]">
+                <div id="approval-inspection-drawer" className="bg-[#101622] border border-slate-800 rounded-2xl p-5 space-y-5 shadow-lg min-h-[350px]">
                     <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider border-b border-slate-800 pb-2">
                         Inspection &amp; Review Drawer
                     </h3>

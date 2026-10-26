@@ -337,59 +337,97 @@ router.get("/image", authenticateUser, async (req, res) => {
 });
 
 // POST /api/timetable/image
-// Upload or replace timetable image
+// Upload or replace timetable image or PDF document
 router.post("/image", authenticateUser, async (req, res) => {
     try {
-        const { imageBase64, title, department, academicYear, semester } = req.body;
-        if (!imageBase64) {
-            return res.status(400).json({ error: "Image data is required ❌" });
+        const { 
+            imageBase64, 
+            fileBase64, 
+            fileName, 
+            fileSize, 
+            title, 
+            department, 
+            academicYear, 
+            semester,
+            replace = true 
+        } = req.body;
+
+        const fileData = fileBase64 || imageBase64;
+        if (!fileData) {
+            return res.status(400).json({ error: "Timetable file data is required (Image or PDF) ❌" });
         }
 
-        // Validate format (Base64 data URL with mime type image/jpeg, image/png, image/webp)
-        const match = imageBase64.match(/^data:(image\/(jpeg|jpg|png|webp));base64,/i);
+        // Validate format (Base64 data URL for images or PDF)
+        const match = fileData.match(/^data:(image\/(jpeg|jpg|png|webp)|application\/pdf);base64,/i);
         if (!match) {
-            return res.status(400).json({ error: "Invalid image format. Supported formats are JPG, JPEG, PNG, and WEBP ❌" });
+            return res.status(400).json({ 
+                error: "Invalid file format. Supported formats are JPG, JPEG, PNG, WEBP, and PDF documents ❌" 
+            });
         }
 
-        // Validate size approx <= 5MB
-        const approxSize = Math.round((imageBase64.length * 3) / 4);
-        if (approxSize > 5 * 1024 * 1024) {
-            return res.status(400).json({ error: "Image file exceeds the 5MB size limit ❌" });
+        const mimeType = match[1].toLowerCase();
+        const fileType = mimeType === "application/pdf" ? "pdf" : "image";
+
+        // Validate size approx <= 10MB
+        const approxSize = Math.round((fileData.length * 3) / 4);
+        if (approxSize > 10 * 1024 * 1024) {
+            return res.status(400).json({ error: "File exceeds the 10MB size limit ❌" });
         }
 
         const organizationId = req.user.organizationId;
         const targetDept = department || req.user.department || "General";
+        const cleanTitle = title ? title.trim() : (fileType === "pdf" ? "Master Department Timetable (PDF)" : "Master Department Timetable");
+        const defaultName = fileName ? fileName.trim() : (fileType === "pdf" ? "Timetable_Schedule.pdf" : "Timetable_Chart.png");
+        const formattedSize = fileSize || `${(approxSize / (1024 * 1024)).toFixed(2)} MB`;
 
-        // Check if an existing image exists for this dept & organization to update or replace
+        // Check if an existing timetable document exists for this dept & organization to update/replace
         let existing = await TimetableImage.findOne({ organizationId, department: targetDept });
-        if (existing) {
-            existing.imageUrl = imageBase64;
-            if (title) existing.title = title.trim();
+        if (existing && replace) {
+            existing.imageUrl = fileData;
+            existing.fileUrl = fileData;
+            existing.fileType = fileType;
+            existing.fileName = defaultName;
+            existing.fileSize = formattedSize;
+            existing.mimeType = mimeType;
+            if (title) existing.title = cleanTitle;
             if (academicYear) existing.academicYear = academicYear;
             if (semester) existing.semester = semester;
             existing.uploadedBy = req.user._id;
             existing.uploadedByName = req.user.name || "Faculty Member";
             existing.uploadedAt = new Date();
             await existing.save();
-            return res.json({ success: true, message: "Timetable image updated successfully ✅", image: existing });
+            return res.json({ 
+                success: true, 
+                message: `Timetable ${fileType.toUpperCase()} updated successfully ✅`, 
+                image: existing 
+            });
         }
 
-        const newImage = new TimetableImage({
+        const newDoc = new TimetableImage({
             organizationId,
             department: targetDept,
-            title: title ? title.trim() : "Master Department Timetable",
+            title: cleanTitle,
             academicYear: academicYear || "2026-2027",
             semester: semester || "Current Semester",
-            imageUrl: imageBase64,
+            fileType,
+            fileName: defaultName,
+            fileSize: formattedSize,
+            mimeType,
+            imageUrl: fileData,
+            fileUrl: fileData,
             uploadedBy: req.user._id,
             uploadedByName: req.user.name || "Faculty Member"
         });
 
-        await newImage.save();
-        res.status(201).json({ success: true, message: "Timetable image uploaded successfully ✅", image: newImage });
+        await newDoc.save();
+        res.status(201).json({ 
+            success: true, 
+            message: `Timetable ${fileType.toUpperCase()} uploaded successfully ✅`, 
+            image: newDoc 
+        });
     } catch (err) {
-        console.error("Upload timetable image error:", err);
-        res.status(500).json({ error: "Failed to upload timetable image ❌" });
+        console.error("Upload timetable file error:", err);
+        res.status(500).json({ error: "Failed to upload timetable file ❌" });
     }
 });
 

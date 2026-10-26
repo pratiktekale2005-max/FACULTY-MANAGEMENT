@@ -82,6 +82,31 @@ const studentSchema = new mongoose.Schema({
     addedByRole: { type: String, default: "" }
 });
 
+const conductedLectureSchema = new mongoose.Schema({
+    topic: { type: String, required: true },
+    date: { type: String, required: true },
+    numberOfLectures: { type: Number, default: 1 },
+    classOrSemester: { type: String, default: "" },
+    lecturePlanReference: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+    conductedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    conductedByName: { type: String, default: "" },
+    createdAt: { type: Date, default: Date.now }
+});
+
+const conductedPracticalSchema = new mongoose.Schema({
+    practicalNumber: { type: String, default: "" },
+    title: { type: String, required: true },
+    date: { type: String, required: true },
+    numberOfSessions: { type: Number, default: 1 },
+    batchOrClass: { type: String, default: "" },
+    practicalPlanReference: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+    conductedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    conductedByName: { type: String, default: "" },
+    createdAt: { type: Date, default: Date.now }
+});
+
 const subjectSchema = new mongoose.Schema({
     organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -97,6 +122,8 @@ const subjectSchema = new mongoose.Schema({
     practicalsConducted: { type: Number, default: 0 },
     lectures: [lectureSchema],
     practicals: [practicalSchema],
+    conductedLecturesList: [conductedLectureSchema],
+    conductedPracticalsList: [conductedPracticalSchema],
     teachingPlan: [teachingPlanItemSchema],
     students: [studentSchema],
     hasDivision: { type: Boolean, default: false },

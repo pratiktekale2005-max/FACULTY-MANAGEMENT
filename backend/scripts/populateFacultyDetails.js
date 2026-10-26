@@ -82,7 +82,7 @@ async function populateDetails() {
             },
             {
                 email: 'laxmantekale260@gmail.com',
-                name: 'Adsul Mam',
+                name: 'Dr. Alpana Adsul',
                 role: 'HOD',
                 department: 'Computer Science & Engineering',
                 departmentId: csDept?._id,

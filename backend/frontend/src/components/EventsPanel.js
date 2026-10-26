@@ -917,8 +917,8 @@ function EventsPanel({ currentUser }) {
 
             {/* ================= COMPLETE EVENT DETAILS MODAL (Section 10.B to 10.H) ================= */}
             {selectedEvent && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 animate-scale-up max-h-[92vh] flex flex-col">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 animate-scale-up my-auto max-h-[92vh] flex flex-col">
                         {/* Modal Header */}
                         <div className="flex items-start justify-between border-b border-slate-800 pb-4 shrink-0">
                             <div className="space-y-1">
@@ -1715,8 +1715,8 @@ function EventsPanel({ currentUser }) {
 
             {/* ================= REGISTER EVENT MODAL ================= */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
                                 <span>🎯</span> Register Campus Event
@@ -1907,8 +1907,8 @@ function EventsPanel({ currentUser }) {
 
             {/* ================= EDIT EVENT MODAL ================= */}
             {showEditModal && editForm && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
                                 <span>✏️</span> Edit Event Details
@@ -2055,8 +2055,8 @@ function EventsPanel({ currentUser }) {
 
             {/* ================= GUEST SUB-MODAL (ADD / EDIT) ================= */}
             {showGuestModal && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
                                 <span>👤</span> {editingGuestId ? "Edit Guest Details" : "Add Guest to Event"}

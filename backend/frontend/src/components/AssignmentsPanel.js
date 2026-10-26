@@ -411,8 +411,8 @@ function AssignmentsPanel({ currentUser }) {
 
             {/* Add / Edit Form Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="w-full max-w-xl bg-[#101622] border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="w-full max-w-xl bg-[#101622] border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 my-auto max-h-[90vh] overflow-y-auto">
                         <div>
                             <h3 className="text-xs font-bold text-slate-100 uppercase tracking-widest">{editingAss ? "Modify Assignment Details" : "Create Subject Assignment"}</h3>
                             <p className="text-[10px] text-slate-450 mt-0.5">Define subject milestones, set marks limits, and upload instructions sheets</p>

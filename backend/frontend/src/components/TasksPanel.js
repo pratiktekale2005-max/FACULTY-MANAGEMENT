@@ -278,8 +278,16 @@ function TasksPanel({ currentUser }) {
                     </button>
                     {(currentUser.role === "Principal" || currentUser.role === "HOD") && (
                         <button
-                            onClick={() => setIsAssigning(!isAssigning)}
-                            className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-600/10"
+                            onClick={() => {
+                                const next = !isAssigning;
+                                setIsAssigning(next);
+                                if (next) {
+                                    setTimeout(() => {
+                                        document.getElementById("task-assignment-form-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                    }, 60);
+                                }
+                            }}
+                            className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 text-white font-bold rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
                         >
                             {isAssigning ? "✕ Close Form" : "➕ Assign Task"}
                         </button>
@@ -302,7 +310,7 @@ function TasksPanel({ currentUser }) {
 
             {/* Task Creation Form (HOD / Principal) */}
             {isAssigning && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
-                <div className="bg-[#101622] border border-slate-800 p-6 rounded-2xl animate-fade-in space-y-4 shadow-xl">
+                <div id="task-assignment-form-card" className="bg-[#101622] border border-slate-800 p-6 rounded-2xl animate-fade-in space-y-4 shadow-xl">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                         <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                             <span>📋 Assign New Faculty Task</span>
@@ -684,8 +692,8 @@ function TasksPanel({ currentUser }) {
 
             {/* Task Detail Modal */}
             {selectedTask && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
+                    <div className="bg-[#101622] border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <div>
                                 <span className="text-[9px] uppercase font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">

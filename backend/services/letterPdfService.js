@@ -68,11 +68,11 @@ function drawFixedLetterhead(doc, topY = 40) {
     doc.moveTo(45, ruleY).lineTo(550, ruleY).lineWidth(1.2).strokeColor("#800000").stroke();
     doc.moveTo(45, ruleY + 2.5).lineTo(550, ruleY + 2.5).lineWidth(0.5).strokeColor("#1e1b4b").stroke();
 
-    // 5. Letter Pad Designation Information: Dr. Adsul Mam & Dr. Suresh Mali
+    // 5. Letter Pad Designation Information: Dr. Alpana Adsul & Dr. Suresh Mali
     doc.font("Helvetica-Bold")
         .fontSize(7.5)
         .fillColor("#1e1b4b")
-        .text("Dr. Adsul Mam", 45, ruleY + 5, { align: "left", width: 250 });
+        .text("Dr. Alpana Adsul", 45, ruleY + 5, { align: "left", width: 250 });
     doc.font("Helvetica")
         .fontSize(6.5)
         .fillColor("#64748b")
@@ -318,7 +318,7 @@ function generateOfficialLetterPdf(letterData = {}) {
 
                 // HOD / Vice Principal
                 doc.moveTo(222, sigY).lineTo(222 + colW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-                doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text("Dr. Adsul Mam", 222, sigY + 5, { width: colW, align: "center" });
+                doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text("Dr. Alpana Adsul", 222, sigY + 5, { width: colW, align: "center" });
                 doc.font("Helvetica").fontSize(7.5).fillColor("#4338ca").text("Vice Principal / CE - HOD", 222, sigY + 16, { width: colW, align: "center" });
                 doc.font("Helvetica").fontSize(7).fillColor("#64748b").text(senderDept ? `Dept. of ${senderDept}` : "Academic Affairs", 222, sigY + 26, { width: colW, align: "center", ellipsis: true });
 
@@ -381,7 +381,7 @@ function generateWorkshopSummaryPdf(reportData = {}) {
                 speakerDesignation = "Senior Technical Consultant",
                 speakerOrganization = "Industry Enterprise",
                 facultyCoordinator = "Mr. Swami Panjala",
-                hodName = "Dr. Adsul Mam",
+                hodName = "Dr. Alpana Adsul",
                 principalName = "Dr. Suresh Mali",
                 objectives = [],
                 description = "",
@@ -586,9 +586,9 @@ function generateWorkshopSummaryPdf(reportData = {}) {
             doc.font("Helvetica").fontSize(8).fillColor("#64748b").text("Faculty Coordinator", 45, sigY + 17, { width: sigW, align: "center" });
             doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text(department, 45, sigY + 28, { width: sigW, align: "center", ellipsis: true });
 
-            // 2. HOD (Dr. Adsul Mam)
+            // 2. HOD (Dr. Alpana Adsul)
             doc.moveTo(222, sigY).lineTo(222 + sigW, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-            doc.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a").text(hodName || "Dr. Adsul Mam", 222, sigY + 5, { width: sigW, align: "center" });
+            doc.font("Helvetica-Bold").fontSize(9).fillColor("#0f172a").text(hodName || "Dr. Alpana Adsul", 222, sigY + 5, { width: sigW, align: "center" });
             doc.font("Helvetica").fontSize(8).fillColor("#64748b").text("Vice Principal / CE - HOD", 222, sigY + 17, { width: sigW, align: "center" });
             doc.font("Helvetica").fontSize(7.5).fillColor("#94a3b8").text(`Dept. of ${department}`, 222, sigY + 28, { width: sigW, align: "center" });
 
@@ -809,7 +809,7 @@ function generateRemunerationPdf(data = {}) {
 
             // Signature 2: HOD / Vice Principal
             doc.moveTo(222, sigY).lineTo(222 + sigWidth, sigY).lineWidth(0.8).strokeColor("#94a3b8").stroke();
-            doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(hodName || "Dr. Adsul Mam", 222, sigY + 5, { width: sigWidth, align: "center" });
+            doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#0f172a").text(hodName || "Dr. Alpana Adsul", 222, sigY + 5, { width: sigWidth, align: "center" });
             doc.font("Helvetica").fontSize(7.5).fillColor("#64748b").text("Vice Principal / CE - HOD", 222, sigY + 16, { width: sigWidth, align: "center" });
             doc.font("Helvetica").fontSize(7).fillColor("#94a3b8").text(departmentName, 222, sigY + 26, { width: sigWidth, align: "center", ellipsis: true });
 
