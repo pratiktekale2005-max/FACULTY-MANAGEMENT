@@ -38,15 +38,19 @@ function TimetablePanel({ currentUser }) {
     const [submitting, setSubmitting] = useState(false);
     const formRef = useRef(null);
 
-    // Timetable Image State (Requirement 8)
+    // Timetable Document State (Both Images & PDF Supported - Req 1 & 2)
     const [timetableImage, setTimetableImage] = useState(null);
     const [showUploadImageModal, setShowUploadImageModal] = useState(false);
     const [imageFilePreview, setImageFilePreview] = useState("");
+    const [uploadFileType, setUploadFileType] = useState("image"); // "image" or "pdf"
+    const [uploadFileName, setUploadFileName] = useState("");
+    const [uploadFileSize, setUploadFileSize] = useState("");
     const [imageTitle, setImageTitle] = useState("Master Department Timetable");
     const [imageSemester, setImageSemester] = useState("Even Semester");
     const [imageAcademicYear, setImageAcademicYear] = useState("2026-2027");
     const [uploadingImage, setUploadingImage] = useState(false);
     const [enlargedImage, setEnlargedImage] = useState(null);
+    const [zoomLevel, setZoomLevel] = useState(1);
 
     const initialFormState = {
         date: new Date().toISOString().split("T")[0],
@@ -208,22 +212,28 @@ function TimetablePanel({ currentUser }) {
         }
     };
 
-    // Handle Timetable Image File Selection
+    // Handle Timetable File Selection (Images & PDF)
     const handleImageFileChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const maxSizeBytes = 5 * 1024 * 1024;
-        const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+        const maxSizeBytes = 10 * 1024 * 1024; // 10MB limit
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        const isImage = file.type.startsWith("image/") || ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type.toLowerCase());
 
-        if (!validTypes.includes(file.type.toLowerCase())) {
-            alert(`"${file.name}" is not a supported format. Please upload JPG, JPEG, PNG, or WEBP.`);
+        if (!isPdf && !isImage) {
+            alert(`"${file.name}" is not a supported file format. Please upload JPG, PNG, WEBP, or PDF.`);
             return;
         }
         if (file.size > maxSizeBytes) {
-            alert(`"${file.name}" exceeds the 5MB size limit.`);
+            alert(`"${file.name}" exceeds the 10MB size limit.`);
             return;
         }
+
+        const type = isPdf ? "pdf" : "image";
+        setUploadFileType(type);
+        setUploadFileName(file.name);
+        setUploadFileSize(`${(file.size / (1024 * 1024)).toFixed(2)} MB`);
 
         const reader = new FileReader();
         reader.onload = () => {
@@ -232,49 +242,57 @@ function TimetablePanel({ currentUser }) {
         reader.readAsDataURL(file);
     };
 
-    // Save / Upload Timetable Image
+    // Save / Upload Timetable File (Image or PDF)
     const handleSaveTimetableImage = async (e) => {
         e.preventDefault();
         if (!imageFilePreview) {
-            alert("Please select a timetable image first! ❌");
+            alert("Please select a timetable file (Image or PDF) first! ❌");
             return;
         }
 
         setUploadingImage(true);
         try {
             const res = await api.post("/timetable/image", {
+                fileBase64: imageFilePreview,
                 imageBase64: imageFilePreview,
-                title: imageTitle.trim() || "Master Department Timetable",
+                fileType: uploadFileType,
+                fileName: uploadFileName || (uploadFileType === "pdf" ? "Timetable_Schedule.pdf" : "Timetable_Chart.png"),
+                fileSize: uploadFileSize,
+                title: imageTitle.trim() || (uploadFileType === "pdf" ? "Master Department Timetable (PDF)" : "Master Department Timetable"),
                 department: currentUser.department || "Computer Science & Engineering",
                 academicYear: imageAcademicYear,
-                semester: imageSemester
+                semester: imageSemester,
+                replace: true
             });
-            setMsg(res.message || "Timetable image saved successfully! 🖼️✅");
+            setMsg(res.message || `Timetable ${uploadFileType.toUpperCase()} saved successfully! 📁✅`);
             setShowUploadImageModal(false);
             setImageFilePreview("");
+            setUploadFileName("");
+            setUploadFileSize("");
             await loadTimetableImage();
             setTimeout(() => setMsg(""), 5000);
         } catch (err) {
-            console.error("Upload timetable image error:", err);
-            alert(err.response?.data?.error || err.message || "Failed to upload timetable image ❌");
+            console.error("Upload timetable error:", err);
+            alert(err.response?.data?.error || err.message || "Failed to upload timetable ❌");
         } finally {
             setUploadingImage(false);
         }
     };
 
-    // Delete Timetable Image
+    // Delete Timetable File
     const handleDeleteTimetableImage = async () => {
         if (!timetableImage) return;
-        if (!window.confirm("Are you sure you want to delete the uploaded timetable image? 🗑️")) return;
+        const fileTypeName = timetableImage.fileType === "pdf" ? "PDF document" : "image chart";
+        if (!window.confirm(`Are you sure you want to delete the uploaded timetable ${fileTypeName}? 🗑️`)) return;
 
         try {
             await api.delete(`/timetable/image/${timetableImage._id}`);
-            setMsg("Timetable image deleted successfully! 🗑️✅");
+            setMsg("Timetable file deleted successfully! 🗑️✅");
             setTimetableImage(null);
             setTimeout(() => setMsg(""), 4000);
         } catch (err) {
-            console.error("Delete image error:", err);
-            alert(err.response?.data?.error || err.message || "Failed to delete timetable image ❌");
+            console.error("Delete file error:", err);
+            alert(err.response?.data?.error || err.message || "Failed to delete timetable ❌");
         }
     };
 
@@ -383,10 +401,13 @@ function TimetablePanel({ currentUser }) {
                         <span>➕</span> Add Timetable Entry
                     </button>
 
-                    {/* Requirement 8: Upload Timetable Image button */}
+                    {/* Requirement 1 & 2: Upload Timetable Document button (Images & PDF) */}
                     <button
                         onClick={() => {
-                            setImageFilePreview(timetableImage?.imageUrl || "");
+                            setImageFilePreview(timetableImage?.fileUrl || timetableImage?.imageUrl || "");
+                            setUploadFileType(timetableImage?.fileType || "image");
+                            setUploadFileName(timetableImage?.fileName || "");
+                            setUploadFileSize(timetableImage?.fileSize || "");
                             setImageTitle(timetableImage?.title || "Master Department Timetable");
                             setImageSemester(timetableImage?.semester || "Even Semester");
                             setImageAcademicYear(timetableImage?.academicYear || "2026-2027");
@@ -394,7 +415,7 @@ function TimetablePanel({ currentUser }) {
                         }}
                         className="px-4 py-2 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/20"
                     >
-                        <span>📷</span> {timetableImage ? "Replace Timetable Image" : "Upload Timetable Image"}
+                        <span>📁</span> {timetableImage ? "Replace Timetable (Image / PDF)" : "Upload Timetable (Image / PDF)"}
                     </button>
 
                     <button
@@ -421,6 +442,149 @@ function TimetablePanel({ currentUser }) {
                 <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl flex items-center justify-between animate-fade-in">
                     <span>{errMsg}</span>
                     <button onClick={() => setErrMsg("")} className="font-bold cursor-pointer">✕</button>
+                </div>
+            )}
+
+            {/* ================= REQUIREMENT 2: MASTER TIMETABLE PREVIEW DISPLAYED IMMEDIATELY BELOW HEADER ================= */}
+            {timetableImage && (
+                <div id="master-timetable-preview-card" className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-xl space-y-4 animate-fade-in">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-3">
+                            <span className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl text-xl shrink-0">
+                                {timetableImage.fileType === "pdf" ? "📄" : "🖼️"}
+                            </span>
+                            <div>
+                                <h3 className="text-sm font-bold text-white flex flex-wrap items-center gap-2">
+                                    <span>{timetableImage.title || "Master Timetable Document"}</span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
+                                        {timetableImage.fileType === "pdf" ? "PDF Document" : "Image Chart"}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                        {timetableImage.semester || "Current Sem"} • {timetableImage.academicYear || "2026-2027"}
+                                    </span>
+                                </h3>
+                                <p className="text-[11px] text-slate-400 mt-0.5">
+                                    {timetableImage.fileName && <span className="font-mono text-slate-300 font-semibold">{timetableImage.fileName} </span>}
+                                    {timetableImage.fileSize && <span className="text-slate-500">({timetableImage.fileSize}) • </span>}
+                                    Uploaded by <span className="text-slate-200 font-semibold">{timetableImage.uploadedByName || "Faculty"}</span> on {timetableImage.uploadedAt ? new Date(timetableImage.uploadedAt).toLocaleDateString() : "recently"}.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            {timetableImage.fileType === "pdf" ? (
+                                <>
+                                    <a
+                                        href={timetableImage.fileUrl || timetableImage.imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span>↗️</span> Open in New Tab
+                                    </a>
+                                    <a
+                                        href={timetableImage.fileUrl || timetableImage.imageUrl}
+                                        download={timetableImage.fileName || "Timetable_Schedule.pdf"}
+                                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span>📥</span> Download PDF
+                                    </a>
+                                </>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setZoomLevel(1);
+                                        setEnlargedImage(timetableImage.fileUrl || timetableImage.imageUrl);
+                                    }}
+                                    className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>🔍</span> View Full &amp; Zoom
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setImageFilePreview(timetableImage.fileUrl || timetableImage.imageUrl);
+                                    setUploadFileType(timetableImage.fileType || "image");
+                                    setUploadFileName(timetableImage.fileName || "");
+                                    setUploadFileSize(timetableImage.fileSize || "");
+                                    setImageTitle(timetableImage.title || "Master Department Timetable");
+                                    setImageSemester(timetableImage.semester || "Even Semester");
+                                    setImageAcademicYear(timetableImage.academicYear || "2026-2027");
+                                    setShowUploadImageModal(true);
+                                }}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                            >
+                                <span>🔄</span> Replace
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteTimetableImage}
+                                className="p-1.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-xl transition cursor-pointer"
+                                title="Delete Timetable Document"
+                            >
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Preview Body: Responsive Inline PDF Viewer or Image */}
+                    {timetableImage.fileType === "pdf" || (timetableImage.imageUrl && timetableImage.imageUrl.startsWith("data:application/pdf")) ? (
+                        <div className="space-y-2">
+                            <div className="w-full h-[520px] sm:h-[620px] rounded-xl overflow-hidden border border-slate-800 bg-slate-950 shadow-inner">
+                                <iframe
+                                    src={timetableImage.fileUrl || timetableImage.imageUrl}
+                                    title={timetableImage.title || "Master Department Timetable PDF"}
+                                    className="w-full h-full border-none"
+                                />
+                            </div>
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                                <span className="flex items-center gap-1.5">
+                                    <span>💡</span>
+                                    <span>Inline browser PDF display active. If inline view does not render in your browser, use the Open or Download buttons.</span>
+                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <a
+                                        href={timetableImage.fileUrl || timetableImage.imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg font-semibold transition"
+                                    >
+                                        ↗️ Open in New Tab
+                                    </a>
+                                    <a
+                                        href={timetableImage.fileUrl || timetableImage.imageUrl}
+                                        download={timetableImage.fileName || "Timetable_Schedule.pdf"}
+                                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-semibold transition"
+                                    >
+                                        📥 Download PDF
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div 
+                            onClick={() => {
+                                setZoomLevel(1);
+                                setEnlargedImage(timetableImage.fileUrl || timetableImage.imageUrl);
+                            }}
+                            className="relative group rounded-xl overflow-hidden border border-slate-800 cursor-pointer max-h-72 bg-slate-950 flex items-center justify-center shadow-inner"
+                            title="Click to view full size and zoom"
+                        >
+                            <img 
+                                src={timetableImage.fileUrl || timetableImage.imageUrl} 
+                                alt={timetableImage.title || "Master Timetable Chart"}
+                                className="max-h-72 w-auto object-contain transition duration-300 group-hover:scale-[1.01]" 
+                            />
+                            <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                <span className="px-4 py-2 bg-slate-900/90 text-white rounded-xl text-xs font-bold border border-slate-700 shadow-xl flex items-center gap-2">
+                                    <span>🔍 Click to View Full Size &amp; Zoom</span>
+                                </span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -695,74 +859,6 @@ function TimetablePanel({ currentUser }) {
                 </div>
             </div>
 
-            {/* ================= REQUIREMENT 8: MASTER TIMETABLE IMAGE SECTION ================= */}
-            {timetableImage && (
-                <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-5 shadow-xl space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                        <div className="flex items-center gap-2.5">
-                            <span className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl text-lg">🖼️</span>
-                            <div>
-                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                    <span>{timetableImage.title || "Master Timetable Chart"}</span>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                        {timetableImage.semester || "Current Sem"} • {timetableImage.academicYear || "2026-2027"}
-                                    </span>
-                                </h3>
-                                <p className="text-[11px] text-slate-400">
-                                    Uploaded by <span className="text-slate-200 font-semibold">{timetableImage.uploadedByName || "Faculty"}</span> on {timetableImage.uploadedAt ? new Date(timetableImage.uploadedAt).toLocaleDateString() : "recently"}.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setEnlargedImage(timetableImage.imageUrl)}
-                                className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                            >
-                                <span>🔍</span> View Full Chart
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setImageFilePreview(timetableImage.imageUrl);
-                                    setImageTitle(timetableImage.title);
-                                    setImageSemester(timetableImage.semester);
-                                    setImageAcademicYear(timetableImage.academicYear);
-                                    setShowUploadImageModal(true);
-                                }}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
-                            >
-                                <span>🔄</span> Replace
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleDeleteTimetableImage}
-                                className="p-1.5 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 rounded-xl transition cursor-pointer"
-                                title="Delete Chart Image"
-                            >
-                                🗑️
-                            </button>
-                        </div>
-                    </div>
-
-                    <div 
-                        onClick={() => setEnlargedImage(timetableImage.imageUrl)}
-                        className="relative group rounded-xl overflow-hidden border border-slate-800 cursor-pointer max-h-64 bg-slate-950 flex items-center justify-center"
-                    >
-                        <img 
-                            src={timetableImage.imageUrl} 
-                            alt="Master Timetable Chart"
-                            className="max-h-64 w-auto object-contain transition duration-300 group-hover:scale-[1.01]" 
-                        />
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                            <span className="px-4 py-2 bg-slate-900/90 text-white rounded-xl text-xs font-bold border border-slate-700 shadow-xl flex items-center gap-2">
-                                <span>🔍 Click to View Full Size</span>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Controls Bar: Search, Filters & View Mode */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
@@ -971,17 +1067,22 @@ function TimetablePanel({ currentUser }) {
                 )}
             </div>
 
-            {/* ================= REQUIREMENT 8: UPLOAD / REPLACE TIMETABLE IMAGE MODAL ================= */}
+            {/* ================= REQUIREMENT 1: UPLOAD / REPLACE TIMETABLE FILE MODAL (IMAGES & PDF) ================= */}
             {showUploadImageModal && (
-                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up max-h-[90vh] overflow-y-auto">
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-base font-bold text-white flex items-center gap-2">
-                                <span>📷</span> {timetableImage ? "Replace Master Timetable Image" : "Upload Master Timetable Image"}
+                                <span>📁</span> {timetableImage ? "Replace Master Timetable (Image or PDF)" : "Upload Master Timetable (Image or PDF)"}
                             </h3>
                             <button 
-                                onClick={() => setShowUploadImageModal(false)} 
-                                className="text-slate-400 hover:text-white cursor-pointer font-bold"
+                                onClick={() => {
+                                    setShowUploadImageModal(false);
+                                    setImageFilePreview("");
+                                    setUploadFileName("");
+                                    setUploadFileSize("");
+                                }} 
+                                className="text-slate-400 hover:text-white cursor-pointer font-bold text-lg"
                             >
                                 ✕
                             </button>
@@ -1028,47 +1129,91 @@ function TimetablePanel({ currentUser }) {
                                 </div>
                             </div>
 
+                            {/* File Upload Selector supporting both Images and PDF */}
                             <div>
                                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                                    Select Timetable Image File (JPG, PNG, WEBP, max 5MB) *
+                                    Choose Timetable File from Computer (JPG, PNG, WEBP, or PDF up to 10MB) *
                                 </label>
-                                <div className="border-2 border-dashed border-slate-800 hover:border-slate-700 rounded-xl p-4 bg-slate-950/60 text-center">
+                                <div className="border-2 border-dashed border-slate-800 hover:border-indigo-500/50 rounded-xl p-5 bg-slate-950/60 text-center transition">
                                     <input
                                         type="file"
                                         id="timetableImageFileInput"
-                                        accept="image/jpeg,image/png,image/webp,image/jpg"
+                                        accept=".pdf,application/pdf,image/jpeg,image/png,image/webp,image/jpg"
                                         className="hidden"
                                         onChange={handleImageFileChange}
                                     />
-                                    <label htmlFor="timetableImageFileInput" className="cursor-pointer text-indigo-400 hover:text-indigo-300 font-semibold flex flex-col items-center justify-center gap-1">
-                                        <span className="text-2xl">🖼️</span>
-                                        <span>Click to Choose Timetable Image</span>
-                                        <span className="text-slate-500 text-[10px]">Supports clear JPG, PNG, WEBP up to 5MB</span>
+                                    <label htmlFor="timetableImageFileInput" className="cursor-pointer text-indigo-400 hover:text-indigo-300 font-semibold flex flex-col items-center justify-center gap-1.5">
+                                        <div className="flex items-center gap-2 text-2xl">
+                                            <span>🖼️</span>
+                                            <span>📄</span>
+                                        </div>
+                                        <span className="text-sm font-bold text-slate-200">
+                                            {uploadFileName ? `Selected: ${uploadFileName}` : "Click to Select Timetable Image or PDF"}
+                                        </span>
+                                        <span className="text-slate-500 text-[11px]">
+                                            Supports JPG, JPEG, PNG, WEBP, and PDF documents (Max 10MB)
+                                        </span>
                                     </label>
                                 </div>
                             </div>
 
-                            {/* Image Preview */}
+                            {/* Selected File Details & Preview Before Saving */}
                             {imageFilePreview && (
-                                <div className="space-y-2">
-                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                                        Preview Before Saving:
-                                    </span>
-                                    <div className="relative rounded-xl overflow-hidden border border-slate-700 max-h-56 bg-slate-950 flex items-center justify-center">
-                                        <img 
-                                            src={imageFilePreview} 
-                                            alt="Timetable Preview" 
-                                            className="max-h-56 w-auto object-contain" 
-                                        />
+                                <div className="space-y-2 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>{uploadFileType === "pdf" ? "📄 PDF File Selected" : "🖼️ Image Selected"}</span>
+                                        </span>
+                                        {uploadFileSize && (
+                                            <span className="text-[10px] text-indigo-400 font-mono bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                                Size: {uploadFileSize}
+                                            </span>
+                                        )}
                                     </div>
+                                    {uploadFileName && (
+                                        <p className="text-[11px] font-mono text-slate-400 truncate">
+                                            File: {uploadFileName}
+                                        </p>
+                                    )}
+
+                                    {uploadFileType === "pdf" ? (
+                                        <div className="p-4 bg-slate-900/80 rounded-lg border border-slate-800 flex items-center gap-3">
+                                            <span className="text-3xl text-rose-400">📄</span>
+                                            <div>
+                                                <p className="text-xs font-bold text-white">{uploadFileName || "Timetable_Schedule.pdf"}</p>
+                                                <p className="text-[10px] text-emerald-400 mt-0.5">
+                                                    ✓ Verified PDF format ready to persist and display in inline viewer
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="relative rounded-lg overflow-hidden border border-slate-700 max-h-52 bg-black/40 flex items-center justify-center">
+                                            <img 
+                                                src={imageFilePreview} 
+                                                alt="Timetable File Preview" 
+                                                className="max-h-52 w-auto object-contain" 
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+                            {timetableImage && (
+                                <p className="text-[11px] text-amber-400/90 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                                    ℹ️ Saving this file will replace the current timetable document. Manual session entries scheduled below will remain fully preserved.
+                                </p>
+                            )}
+
+                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
                                 <button
                                     type="button"
-                                    onClick={() => setShowUploadImageModal(false)}
-                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer"
+                                    onClick={() => {
+                                        setShowUploadImageModal(false);
+                                        setImageFilePreview("");
+                                        setUploadFileName("");
+                                        setUploadFileSize("");
+                                    }}
+                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition cursor-pointer font-semibold"
                                 >
                                     Cancel
                                 </button>
@@ -1080,10 +1225,10 @@ function TimetablePanel({ currentUser }) {
                                     {uploadingImage ? (
                                         <>
                                             <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                                            <span>Saving to Database...</span>
+                                            <span>Saving Document...</span>
                                         </>
                                     ) : (
-                                        <span>💾 Persist Timetable Image</span>
+                                        <span>💾 {timetableImage ? "Update Timetable File" : "Save Timetable File"}</span>
                                     )}
                                 </button>
                             </div>
@@ -1092,39 +1237,89 @@ function TimetablePanel({ currentUser }) {
                 </div>
             )}
 
-            {/* ================= LIGHTBOX FOR ENLARGED TIMETABLE IMAGE ================= */}
+            {/* ================= REQUIREMENT 2: CENTERED LIGHTBOX FOR ENLARGED TIMETABLE IMAGE WITH ZOOM ================= */}
             {enlargedImage && (
                 <div 
-                    className="fixed inset-0 bg-black/95 backdrop-blur-md z-[70] flex items-center justify-center p-4 cursor-pointer"
-                    onClick={() => setEnlargedImage(null)}
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-slate-950/90 backdrop-blur-md overflow-hidden animate-fade-in"
+                    onClick={() => {
+                        setEnlargedImage(null);
+                        setZoomLevel(1);
+                    }}
                 >
-                    <div className="relative max-w-6xl max-h-[92vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="w-full flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-                            <span className="text-white font-bold text-sm">
-                                🖼️ {timetableImage?.title || "Master Timetable Chart"}
-                            </span>
-                            <div className="flex items-center gap-2">
+                    <div 
+                        className="relative w-full max-w-5xl max-h-[92vh] flex flex-col bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden my-auto" 
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Top Toolbar */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/80">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-base">🖼️</span>
+                                <div>
+                                    <h4 className="text-sm font-bold text-white line-clamp-1">
+                                        {timetableImage?.title || "Master Timetable Chart"}
+                                    </h4>
+                                    <span className="text-[10px] text-slate-400">
+                                        Zoom Level: <strong className="text-indigo-400">{Math.round(zoomLevel * 100)}%</strong>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                {/* Zoom Controls */}
+                                <button
+                                    type="button"
+                                    onClick={() => setZoomLevel(prev => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                                    title="Zoom Out (-25%)"
+                                >
+                                    ➖
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setZoomLevel(1)}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                                    title="Reset Zoom to 100%"
+                                >
+                                    100%
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setZoomLevel(prev => Math.min(3, Number((prev + 0.25).toFixed(2))))}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                                    title="Zoom In (+25%)"
+                                >
+                                    ➕
+                                </button>
+
                                 <a 
                                     href={enlargedImage} 
-                                    download="Master_Timetable.png" 
-                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
+                                    download={timetableImage?.fileName || "Master_Timetable.png"} 
+                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-md transition ml-1"
                                 >
                                     📥 Download
                                 </a>
                                 <button
                                     type="button"
-                                    onClick={() => setEnlargedImage(null)}
-                                    className="text-white bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg text-xs font-bold"
+                                    onClick={() => {
+                                        setEnlargedImage(null);
+                                        setZoomLevel(1);
+                                    }}
+                                    className="px-3 py-1 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition cursor-pointer ml-1"
                                 >
                                     ✕ Close
                                 </button>
                             </div>
                         </div>
-                        <img
-                            src={enlargedImage}
-                            alt="Full Timetable Chart"
-                            className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl border border-slate-700"
-                        />
+
+                        {/* Scrollable / Zoomable image container */}
+                        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950/40 min-h-[300px] max-h-[78vh]">
+                            <img
+                                src={enlargedImage}
+                                alt="Full Timetable Chart"
+                                style={{ transform: `scale(${zoomLevel})`, transformOrigin: "center center", transition: "transform 0.15s ease-out" }}
+                                className="max-w-full max-h-[74vh] object-contain rounded-lg shadow-xl"
+                            />
+                        </div>
                     </div>
                 </div>
             )}

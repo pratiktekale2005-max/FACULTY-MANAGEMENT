@@ -6,7 +6,12 @@ const timetableImageSchema = new mongoose.Schema({
     title: { type: String, default: "Master Department Timetable" },
     academicYear: { type: String, default: "2026-2027" },
     semester: { type: String, default: "Current Semester" },
-    imageUrl: { type: String, required: true }, // Base64 data URL
+    fileType: { type: String, enum: ["image", "pdf"], default: "image" },
+    fileName: { type: String, default: "" },
+    fileSize: { type: String, default: "" },
+    mimeType: { type: String, default: "" },
+    imageUrl: { type: String, required: true }, // Base64 data URL (image or PDF data url for backwards compatibility)
+    fileUrl: { type: String, default: "" },    // Canonical file URL / data URL
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     uploadedByName: { type: String, default: "" },
     uploadedAt: { type: Date, default: Date.now }

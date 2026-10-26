@@ -46,6 +46,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     // Core data triggers for children components
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [greenBookNavKey, setGreenBookNavKey] = useState(0);
+    const [tabNavKeys, setTabNavKeys] = useState({});
 
     const triggerRefresh = () => setRefreshTrigger(prev => prev + 1);
 
@@ -216,10 +217,21 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
     };
 
     const renderNavButton = (tab, icon, label) => {
-        const isActive = currentTab === tab;
+        const isActive = currentTab === tab || 
+            (tab === "events" && currentTab === "workshops") || 
+            (tab === "workshops" && currentTab === "events") ||
+            (tab === "assignments" && currentTab === "assignment-marks");
+
         return (
             <button
                 onClick={() => { 
+                    setTabNavKeys(prev => ({
+                        ...prev,
+                        [tab]: (prev[tab] || 0) + 1,
+                        ...(tab === "events" ? { workshops: (prev.workshops || 0) + 1 } : {}),
+                        ...(tab === "workshops" ? { events: (prev.events || 0) + 1 } : {}),
+                        ...(tab === "assignments" ? { "assignment-marks": (prev["assignment-marks"] || 0) + 1 } : {})
+                    }));
                     if (tab === "greenbook") {
                         setGreenBookNavKey(k => k + 1);
                     }
@@ -594,12 +606,14 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {currentTab === "overview" && (
                                 currentUser.role === "HOD" ? (
                                     <HODDashboard 
+                                        key={`hod-dash-${tabNavKeys["overview"] || 0}`}
                                         currentUser={currentUser} 
                                         setCurrentTab={setCurrentTab} 
                                         onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)} 
                                     />
                                 ) : selectedDepartment ? (
                                     <DepartmentFacultyView 
+                                        key={`dept-view-${selectedDepartment.code}-${tabNavKeys["overview"] || 0}`}
                                         departmentCode={selectedDepartment.code} 
                                         departmentName={selectedDepartment.name} 
                                         onBack={() => setSelectedDepartment(null)} 
@@ -608,6 +622,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                     />
                                 ) : (
                                     <AnalyticsPanel 
+                                        key={`analytics-${tabNavKeys["overview"] || 0}`}
                                         currentUser={currentUser} 
                                         setCurrentTab={setCurrentTab} 
                                         onSelectDepartment={(code, name) => {
@@ -622,6 +637,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* MY CLASSES VIEW */}
                             {currentTab === "my-classes" && (
                                 <MyClassesPanel 
+                                    key={`my-classes-${tabNavKeys["my-classes"] || 0}`}
                                     currentUser={currentUser} 
                                     onNavigate={(tab) => setCurrentTab(tab)} 
                                 />
@@ -630,6 +646,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* TIMETABLE VIEW */}
                             {currentTab === "timetable" && (
                                 <TimetablePanel 
+                                    key={`timetable-${tabNavKeys["timetable"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -637,6 +654,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* ATTENDANCE MANAGEMENT VIEW */}
                             {currentTab === "attendance" && (
                                 <AttendancePanel 
+                                    key={`attendance-${tabNavKeys["attendance"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -644,6 +662,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* ASSIGNMENTS & MARKS VIEW */}
                             {(currentTab === "assignments" || currentTab === "assignment-marks") && (
                                 <AssignmentsPanel 
+                                    key={`assignments-${tabNavKeys["assignments"] || tabNavKeys["assignment-marks"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -651,6 +670,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* FACULTY ASSIGNED SUBJECTS VIEW */}
                             {currentTab === "subjects" && (
                                 <FacultySubjectsPanel 
+                                    key={`subjects-${tabNavKeys["subjects"] || 0}`}
                                     currentUser={currentUser} 
                                     onNavigate={(tab) => setCurrentTab(tab)} 
                                 />
@@ -659,6 +679,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* LEAVE MANAGEMENT VIEW */}
                             {currentTab === "leave" && (
                                 <LeaveManagementPanel 
+                                    key={`leave-${tabNavKeys["leave"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -666,6 +687,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* NOTICES & ANNOUNCEMENTS VIEW */}
                             {currentTab === "notices" && (
                                 <NoticesPanel 
+                                    key={`notices-${tabNavKeys["notices"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -673,6 +695,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* FACULTY DIRECTORY VIEW */}
                             {currentTab === "faculty" && (currentUser.role === "Principal" || currentUser.role === "HOD") && (
                                 <FacultyDirectory 
+                                    key={`faculty-dir-${tabNavKeys["faculty"] || 0}`}
                                     currentUser={currentUser} 
                                     onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
                                     refreshTrigger={refreshTrigger}
@@ -683,6 +706,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* ACADEMIC GREEN BOOK VIEW */}
                             {currentTab === "greenbook" && (
                                 <GreenBookPanel 
+                                    key={`greenbook-${tabNavKeys["greenbook"] || 0}`}
                                     currentUser={currentUser} 
                                     navKey={greenBookNavKey}
                                     refreshTrigger={refreshTrigger} 
@@ -694,6 +718,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* EVENTS VIEW */}
                             {(currentTab === "events" || currentTab === "workshops") && (
                                 <EventsPanel 
+                                    key={`events-${tabNavKeys["events"] || tabNavKeys["workshops"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -701,6 +726,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* OTHER ACTIVITIES VIEW */}
                             {currentTab === "activities" && (currentUser.role === "Faculty" || currentUser.role === "HOD") && (
                                 <ActivitiesPanel 
+                                    key={`activities-${tabNavKeys["activities"] || 0}`}
                                     currentUser={currentUser} 
                                     refreshTrigger={refreshTrigger} 
                                     onRefresh={triggerRefresh}
@@ -710,6 +736,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* RESEARCH PAPERS VIEW */}
                             {currentTab === "papers" && (
                                 <PapersPanel 
+                                    key={`papers-${tabNavKeys["papers"] || 0}`}
                                     currentUser={currentUser} 
                                     refreshTrigger={refreshTrigger} 
                                     onRefresh={triggerRefresh}
@@ -719,6 +746,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* APPROVALS CENTER VIEW */}
                             {currentTab === "approvals" && (
                                 <ApprovalCenter 
+                                    key={`approvals-${tabNavKeys["approvals"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -732,6 +760,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                     </div>
                                 ) : (
                                     <FacultyPerformance 
+                                        key={`performance-${tabNavKeys["faculty-performance"] || 0}`}
                                         currentUser={currentUser} 
                                     />
                                 )
@@ -740,6 +769,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* TASKS VIEW */}
                             {currentTab === "tasks" && (
                                 <TasksPanel 
+                                    key={`tasks-${tabNavKeys["tasks"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -747,6 +777,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* DESIGNATION ASSIGNMENT VIEW */}
                             {currentTab === "users" && currentUser.role === "Principal" && (
                                 <DesignationAssignment 
+                                    key={`designation-${tabNavKeys["users"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                     onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
@@ -756,6 +787,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* DEPARTMENT MANAGEMENT VIEW */}
                             {currentTab === "departments" && currentUser.role === "Principal" && (
                                 <DepartmentManagement 
+                                    key={`departments-${tabNavKeys["departments"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                 />
@@ -764,6 +796,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* FACULTY MANAGEMENT VIEW */}
                             {currentTab === "faculty-mgmt" && currentUser.role === "Principal" && (
                                 <FacultyManagement 
+                                    key={`faculty-mgmt-${tabNavKeys["faculty-mgmt"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                     onSelectFaculty={(fac) => setSelectedFacultyProfile(fac)}
@@ -773,6 +806,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* HOD MANAGEMENT VIEW */}
                             {currentTab === "hod-mgmt" && currentUser.role === "Principal" && (
                                 <HODManagement 
+                                    key={`hod-mgmt-${tabNavKeys["hod-mgmt"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                 />
@@ -781,6 +815,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* REPORT GENERATOR VIEW */}
                             {currentTab === "reports" && (
                                 <ReportGeneratorPanel 
+                                    key={`reports-${tabNavKeys["reports"] || 0}`}
                                     currentUser={currentUser} 
                                     refreshTrigger={refreshTrigger} 
                                 />
@@ -789,6 +824,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* PROFILE VIEW */}
                             {currentTab === "profile" && (
                                 <MyProfileView 
+                                    key={`profile-${tabNavKeys["profile"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                 />
@@ -797,6 +833,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* STUDENT MANAGEMENT VIEW */}
                             {currentTab === "students" && (
                                 <StudentManagement 
+                                    key={`students-${tabNavKeys["students"] || 0}`}
                                     currentUser={currentUser} 
                                     onRefresh={triggerRefresh}
                                 />
@@ -818,13 +855,17 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                                         <p className="text-xs">Official Letters module is not accessible from Faculty accounts.</p>
                                     </div>
                                 ) : (
-                                    <InvitationsLetters currentUser={currentUser} />
+                                    <InvitationsLetters 
+                                        key={`invitations-${tabNavKeys["invitations"] || 0}`}
+                                        currentUser={currentUser} 
+                                    />
                                 )
                             )}
 
                             {/* COLLEGE SETTINGS VIEW */}
                             {currentTab === "settings" && currentUser.role === "Principal" && (
                                 <OrganizationSettings 
+                                    key={`settings-${tabNavKeys["settings"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -832,6 +873,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* CERTIFICATIONS PORTFOLIO VIEW */}
                             {currentTab === "certifications" && (
                                 <CertificationsPanel 
+                                    key={`certifications-${tabNavKeys["certifications"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
@@ -839,6 +881,7 @@ function Dashboard({ currentUser, onLogout, theme: propTheme, toggleTheme: propT
                             {/* MY SUBMISSIONS VIEW */}
                             {currentTab === "submissions" && (
                                 <SubmissionsPanel 
+                                    key={`submissions-${tabNavKeys["submissions"] || 0}`}
                                     currentUser={currentUser} 
                                 />
                             )}
