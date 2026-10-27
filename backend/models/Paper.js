@@ -29,6 +29,9 @@ const paperSchema = new mongoose.Schema({
     },
     fileBase64: { type: String, default: "" }, // Supporting Document Upload (PDF)
     certificateBase64: { type: String, default: "" }, // Certificate / Proof Upload (optional)
+    filePath: { type: String, default: "" },
+    documentPath: { type: String, default: "" },
+    attachments: [String],
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     status: { 
         type: String, 

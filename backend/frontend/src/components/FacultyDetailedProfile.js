@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
+import DocumentViewerModal from "./DocumentViewerModal";
+import { openFileInNewTab, downloadAttachment, extractRecordAttachments } from "../utils/attachmentUtils";
 
 function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName, currentUser, onRefresh }) {
     const [loading, setLoading] = useState(true);
@@ -7,6 +9,7 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
     const [profile, setProfile] = useState(facultyData || null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [previewDoc, setPreviewDoc] = useState(null); // Document Viewer Modal state
     const [activities, setActivities] = useState({
         workshops: [],
         papers: [],
@@ -29,6 +32,17 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
         totalFeedbacks: 0
     });
     const [activeTab, setActiveTab] = useState("papers");
+
+    // Open universal document preview modal
+    const openPreview = (file, title, type, fileName) => {
+        if (!file) return;
+        setPreviewDoc({
+            file,
+            title: title || "Attachment Preview",
+            type: type || "Document",
+            fileName: fileName || `${(title || "document").replace(/\s+/g, "_")}`
+        });
+    };
 
     // Password Reset Modal states (Principal Only)
     const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -206,9 +220,18 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                 {/* Left Card: Basic Information */}
                 <div className="bg-[#101622] border border-slate-800 p-6 rounded-2xl shadow-lg text-center space-y-4 flex flex-col items-center">
-                    <div className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-indigo-500/30 bg-slate-950 flex items-center justify-center shadow-lg">
+                    <div 
+                        onClick={() => profile.photoPath && openPreview(profile.photoPath, `${profile.name} - Profile Photograph`, "Profile Photo", `${profile.name.replace(/\s+/g, "_")}_Photo.jpg`)}
+                        className={`relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-indigo-500/30 bg-slate-950 flex items-center justify-center shadow-lg group ${profile.photoPath ? "cursor-pointer" : ""}`}
+                        title={profile.photoPath ? "Click to view full-size profile photograph" : ""}
+                    >
                         {profile.photoPath ? (
-                            <img src={profile.photoPath} alt={profile.name} className="w-full h-full object-cover" />
+                            <>
+                                <img src={profile.photoPath} alt={profile.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1 shadow-inner">
+                                    <span>🔍 View</span>
+                                </div>
+                            </>
                         ) : (
                             <span className="text-4xl">👨‍🏫</span>
                         )}
@@ -252,13 +275,33 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                     </div>
 
                     {profile.resumePath && (
-                        <a
-                            href={profile.resumePath}
-                            download={`${profile.name.replace(/\s+/g, "_")}_Resume.pdf`}
-                            className="w-full text-center py-2.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/20 rounded-xl transition-all block mt-2"
-                        >
-                            📥 Download Curriculum Vitae
-                        </a>
+                        <div className="w-full space-y-1.5 mt-2">
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => openPreview(profile.resumePath, `${profile.name} - Curriculum Vitae`, "Curriculum Vitae", `${profile.name.replace(/\s+/g, "_")}_CV.pdf`)}
+                                    className="flex-1 py-2 px-3 text-xs font-semibold text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:translate-y-0.5 cursor-pointer"
+                                >
+                                    <span>👁️</span>
+                                    <span>View CV (PDF)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => downloadAttachment(profile.resumePath, `${profile.name.replace(/\s+/g, "_")}_CV.pdf`)}
+                                    className="px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl transition-all flex items-center justify-center gap-1.5 active:translate-y-0.5 cursor-pointer"
+                                    title="Download CV"
+                                >
+                                    <span>⬇️</span>
+                                </button>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => openFileInNewTab(profile.resumePath, `${profile.name} - Curriculum Vitae`)}
+                                className="w-full text-center text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer"
+                            >
+                                Open CV in new tab ↗
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -469,34 +512,117 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                                 <p className="text-slate-500 italic py-6 text-center">No research papers logged for this faculty member yet.</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {activities.papers.map(p => (
-                                        <div key={p._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <h5 className="font-bold text-slate-100 text-xs">{p.title}</h5>
-                                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                                    p.publicationStatus === "Published" || p.status === "verified"
-                                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                                        : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                                                }`}>
-                                                    {p.publicationStatus || p.status || "Published"}
-                                                </span>
+                                    {activities.papers.map(p => {
+                                        const attachments = extractRecordAttachments(p, "Research Paper");
+                                        const docAttachments = attachments.filter(a => !a.isImage);
+                                        const photoAttachments = attachments.filter(a => a.isImage);
+                                        const hasAttachments = attachments.length > 0;
+
+                                        return (
+                                            <div key={p._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-colors">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <h5 className="font-bold text-slate-100 text-xs">{p.title}</h5>
+                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                                        p.publicationStatus === "Published" || p.status === "verified"
+                                                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                                            : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                                                    }`}>
+                                                        {p.publicationStatus || p.status || "Published"}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                                    <span>Journal: <strong className="text-slate-300">{p.journal || p.conferenceName || "—"}</strong></span>
+                                                    <span>Indexing: <strong className="text-indigo-400">{p.indexing || "Peer Reviewed"}</strong></span>
+                                                    <span>Date: <strong className="text-slate-300">{p.date || p.publicationDate || "—"}</strong></span>
+                                                    {p.doi && <span>DOI: <strong className="text-slate-300">{p.doi}</strong></span>}
+                                                </div>
+                                                {p.authors && (
+                                                    <p className="text-[10px] text-slate-500">Authors: {p.authors}</p>
+                                                )}
+                                                {p.abstract && (
+                                                    <p className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-850 line-clamp-2">
+                                                        {p.abstract}
+                                                    </p>
+                                                )}
+
+                                                {/* Attachments Section */}
+                                                <div className="pt-2.5 border-t border-slate-900/90 flex flex-wrap items-center justify-between gap-2">
+                                                    {hasAttachments ? (
+                                                        <div className="w-full space-y-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {docAttachments.map(att => (
+                                                                    <div key={att.id} className="inline-flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+                                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                                                                            att.isPdf 
+                                                                                ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" 
+                                                                                : "text-indigo-400 bg-indigo-500/10 border border-indigo-500/20"
+                                                                        }`}>
+                                                                            <span>{att.isPdf ? "📄" : "📎"}</span> {att.label}
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openPreview(att.file, `${p.title} - ${att.label}`, "Research Paper", att.fileName)}
+                                                                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer shadow-sm active:translate-y-0.5"
+                                                                            title={`Preview ${att.label} in viewer`}
+                                                                        >
+                                                                            <span>👁️</span> View
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openFileInNewTab(att.file, `${p.title} - ${att.label}`)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Open in new browser window"
+                                                                        >
+                                                                            <span>↗</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => downloadAttachment(att.file, att.fileName)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Download file"
+                                                                        >
+                                                                            <span>⬇️</span>
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+
+                                                            {photoAttachments.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-900 space-y-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span>📸</span> Figures & Photos ({photoAttachments.length})
+                                                                    </span>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                                                                        {photoAttachments.map((photoAtt, phIdx) => (
+                                                                            <div
+                                                                                key={photoAtt.id}
+                                                                                onClick={() => openPreview(photoAtt.file, `${p.title} - ${photoAtt.label}`, "Paper Figure", photoAtt.fileName)}
+                                                                                className="h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-indigo-500 transition relative group shadow-sm"
+                                                                                title={`Click to view photograph ${phIdx + 1} full-size`}
+                                                                            >
+                                                                                <img
+                                                                                    src={photoAtt.file}
+                                                                                    alt={photoAtt.label}
+                                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                    🔍 View
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5">
+                                                            <span>📂</span> No attachment available
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                                                <span>Journal: <strong className="text-slate-300">{p.journal || p.conferenceName || "—"}</strong></span>
-                                                <span>Indexing: <strong className="text-indigo-400">{p.indexing || "Peer Reviewed"}</strong></span>
-                                                <span>Date: <strong className="text-slate-300">{p.date || p.publicationDate || "—"}</strong></span>
-                                                {p.doi && <span>DOI: <strong className="text-slate-300">{p.doi}</strong></span>}
-                                            </div>
-                                            {p.authors && (
-                                                <p className="text-[10px] text-slate-500">Authors: {p.authors}</p>
-                                            )}
-                                            {p.abstract && (
-                                                <p className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-850 line-clamp-2">
-                                                    {p.abstract}
-                                                </p>
-                                            )}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -509,24 +635,111 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                                 <p className="text-slate-500 italic py-6 text-center">No workshops logged for this faculty member yet.</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {activities.workshops.map(w => (
-                                        <div key={w._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div>
-                                                    <h5 className="font-bold text-slate-100 text-xs">{w.title}</h5>
-                                                    <p className="text-[10px] text-slate-400 mt-0.5">{w.description}</p>
+                                    {activities.workshops.map(w => {
+                                        const attachments = extractRecordAttachments(w, "Workshop");
+                                        const docAttachments = attachments.filter(a => !a.isImage);
+                                        const photoAttachments = attachments.filter(a => a.isImage);
+                                        const hasAnyAttachment = attachments.length > 0;
+
+                                        return (
+                                            <div key={w._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-colors">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <h5 className="font-bold text-slate-100 text-xs">{w.title}</h5>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">{w.description}</p>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                                        {w.workshopType || w.eventType || "Workshop"}
+                                                    </span>
                                                 </div>
-                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                                                    {w.workshopType || w.eventType || "Workshop"}
-                                                </span>
+                                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-slate-900">
+                                                    <span>Date: <strong className="text-slate-300">{w.date || "—"}</strong></span>
+                                                    <span>Venue: <strong className="text-slate-300">{w.venue || "Campus Auditorium"}</strong></span>
+                                                    <span>Speaker: <strong className="text-indigo-400">{w.speakerName || "—"}</strong> ({w.speakerOrganization || "Guest"})</span>
+                                                </div>
+
+                                                {/* Attachments Section */}
+                                                <div className="pt-2.5 border-t border-slate-900/90 space-y-2.5">
+                                                    {hasAnyAttachment ? (
+                                                        <div className="w-full space-y-2">
+                                                            {/* Document scans row */}
+                                                            {docAttachments.length > 0 && (
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    {docAttachments.map(att => (
+                                                                        <div key={att.id} className="inline-flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                                                                                att.isPdf 
+                                                                                    ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" 
+                                                                                    : "text-indigo-300 bg-indigo-500/10 border border-indigo-500/20"
+                                                                            }`}>
+                                                                                <span>{att.isPdf ? "📜" : "📎"}</span> {att.label}
+                                                                            </span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openPreview(att.file, `${w.title} - ${att.label}`, "Workshop Document", att.fileName)}
+                                                                                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer shadow-sm active:translate-y-0.5"
+                                                                                title={`Preview ${att.label} in viewer`}
+                                                                            >
+                                                                                <span>👁️</span> View
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openFileInNewTab(att.file, `${w.title} - ${att.label}`)}
+                                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                                title="Open in new window"
+                                                                            >
+                                                                                <span>↗</span>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => downloadAttachment(att.file, att.fileName)}
+                                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                                title="Download file"
+                                                                            >
+                                                                                <span>⬇️</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Event Photographs Gallery */}
+                                                            {photoAttachments.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-900 space-y-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span>📸</span> Event Photographs ({photoAttachments.length} photo{photoAttachments.length === 1 ? "" : "s"})
+                                                                    </span>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                                                                        {photoAttachments.map((photoAtt, pIdx) => (
+                                                                            <div
+                                                                                key={photoAtt.id}
+                                                                                onClick={() => openPreview(photoAtt.file, `${w.title} - Photograph #${pIdx + 1}`, "Event Photo", photoAtt.fileName)}
+                                                                                className="h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-indigo-500 transition relative group shadow-sm"
+                                                                                title={`Click to view photograph ${pIdx + 1} full-size`}
+                                                                            >
+                                                                                <img
+                                                                                    src={photoAtt.file}
+                                                                                    alt={`Event photograph ${pIdx + 1}`}
+                                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                    🔍 View
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5">
+                                                            <span>📂</span> No attachment available
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-slate-900">
-                                                <span>Date: <strong className="text-slate-300">{w.date || "—"}</strong></span>
-                                                <span>Venue: <strong className="text-slate-300">{w.venue || "Campus Auditorium"}</strong></span>
-                                                <span>Speaker: <strong className="text-indigo-400">{w.speakerName || "—"}</strong> ({w.speakerOrganization || "Guest"})</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -539,24 +752,111 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                                 <p className="text-slate-500 italic py-6 text-center">No seminars or guest lectures logged for this faculty member yet.</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {activities.seminars.map(w => (
-                                        <div key={w._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <div>
-                                                    <h5 className="font-bold text-slate-100 text-xs">{w.title}</h5>
-                                                    <p className="text-[10px] text-slate-400 mt-0.5">{w.description}</p>
+                                    {activities.seminars.map(w => {
+                                        const attachments = extractRecordAttachments(w, "Seminar");
+                                        const docAttachments = attachments.filter(a => !a.isImage);
+                                        const photoAttachments = attachments.filter(a => a.isImage);
+                                        const hasAnyAttachment = attachments.length > 0;
+
+                                        return (
+                                            <div key={w._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-colors">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <div>
+                                                        <h5 className="font-bold text-slate-100 text-xs">{w.title}</h5>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">{w.description}</p>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                                        🎙️ Seminar / Guest Lecture
+                                                    </span>
                                                 </div>
-                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                                                    🎙️ Seminar / Guest Lecture
-                                                </span>
+                                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-slate-900">
+                                                    <span>Date: <strong className="text-slate-300">{w.date || "—"}</strong></span>
+                                                    <span>Venue: <strong className="text-slate-300">{w.venue || "Auditorium"}</strong></span>
+                                                    <span>Resource Person: <strong className="text-purple-300">{w.speakerName || "—"}</strong> ({w.speakerOrganization || "Guest"})</span>
+                                                </div>
+
+                                                {/* Attachments Section */}
+                                                <div className="pt-2.5 border-t border-slate-900/90 space-y-2.5">
+                                                    {hasAnyAttachment ? (
+                                                        <div className="w-full space-y-2">
+                                                            {/* Document scans row */}
+                                                            {docAttachments.length > 0 && (
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    {docAttachments.map(att => (
+                                                                        <div key={att.id} className="inline-flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                                                                                att.isPdf 
+                                                                                    ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" 
+                                                                                    : "text-purple-300 bg-purple-500/10 border border-purple-500/20"
+                                                                            }`}>
+                                                                                <span>{att.isPdf ? "📜" : "📎"}</span> {att.label}
+                                                                            </span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openPreview(att.file, `${w.title} - ${att.label}`, "Seminar Document", att.fileName)}
+                                                                                className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer shadow-sm active:translate-y-0.5"
+                                                                                title={`Preview ${att.label} in viewer`}
+                                                                            >
+                                                                                <span>👁️</span> View
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openFileInNewTab(att.file, `${w.title} - ${att.label}`)}
+                                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                                title="Open in new window"
+                                                                            >
+                                                                                <span>↗</span>
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => downloadAttachment(att.file, att.fileName)}
+                                                                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                                title="Download file"
+                                                                            >
+                                                                                <span>⬇️</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Event Photographs Gallery */}
+                                                            {photoAttachments.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-900 space-y-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span>📸</span> Session Photographs ({photoAttachments.length} photo{photoAttachments.length === 1 ? "" : "s"})
+                                                                    </span>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                                                                        {photoAttachments.map((photoAtt, pIdx) => (
+                                                                            <div
+                                                                                key={photoAtt.id}
+                                                                                onClick={() => openPreview(photoAtt.file, `${w.title} - Photograph #${pIdx + 1}`, "Seminar Photo", photoAtt.fileName)}
+                                                                                className="h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-purple-500 transition relative group shadow-sm"
+                                                                                title={`Click to view photograph ${pIdx + 1} full-size`}
+                                                                            >
+                                                                                <img
+                                                                                    src={photoAtt.file}
+                                                                                    alt={`Session photograph ${pIdx + 1}`}
+                                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                    🔍 View
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5">
+                                                            <span>📂</span> No attachment available
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-slate-900">
-                                                <span>Date: <strong className="text-slate-300">{w.date || "—"}</strong></span>
-                                                <span>Venue: <strong className="text-slate-300">{w.venue || "Auditorium"}</strong></span>
-                                                <span>Resource Person: <strong className="text-purple-300">{w.speakerName || "—"}</strong> ({w.speakerOrganization || "Guest"})</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -569,21 +869,131 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                                 <p className="text-slate-500 italic py-6 text-center">No certifications or FDPs recorded for this faculty member yet.</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {activities.certifications.map(c => (
-                                        <div key={c._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <h5 className="font-bold text-slate-100 text-xs">{c.title}</h5>
-                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                                    {c.certificateType || "Certification"}
-                                                </span>
+                                    {activities.certifications.map(c => {
+                                        const attachments = extractRecordAttachments(c, "Certification");
+                                        const docAttachments = attachments.filter(a => !a.isImage);
+                                        const photoAttachments = attachments.filter(a => a.isImage);
+                                        const hasAttachments = attachments.length > 0;
+                                        const hasVerifyUrl = !!c.verificationUrl;
+
+                                        return (
+                                            <div key={c._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-colors">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <h5 className="font-bold text-slate-100 text-xs">{c.title}</h5>
+                                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                        {c.certificateType || c.type || "Certification"}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
+                                                    <span>Issued By: <strong className="text-slate-300">{c.issuedBy || "—"}</strong></span>
+                                                    <span>Issue Date: <strong className="text-slate-300">{c.issueDate || "—"}</strong></span>
+                                                    {c.credentialId && <span>Credential ID: <strong className="font-mono text-indigo-400">{c.credentialId}</strong></span>}
+                                                    {c.academicYear && <span>Year: <strong className="text-slate-300">{c.academicYear}</strong></span>}
+                                                </div>
+                                                {c.description && (
+                                                    <p className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-850">
+                                                        {c.description}
+                                                    </p>
+                                                )}
+
+                                                {/* Attachments Section */}
+                                                <div className="pt-2.5 border-t border-slate-900/90 flex flex-wrap items-center justify-between gap-2">
+                                                    {hasAttachments ? (
+                                                        <div className="w-full space-y-2">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {docAttachments.map(att => (
+                                                                    <div key={att.id} className="inline-flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl">
+                                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                                                                            att.isPdf 
+                                                                                ? "text-rose-400 bg-rose-500/10 border border-rose-500/20" 
+                                                                                : "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20"
+                                                                        }`}>
+                                                                            <span>{att.isPdf ? "📄" : "🏅"}</span> {att.label}
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openPreview(att.file, `${c.title} - ${att.label}`, "Certification", att.fileName)}
+                                                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer shadow-sm active:translate-y-0.5"
+                                                                            title={`Preview ${att.label} in viewer`}
+                                                                        >
+                                                                            <span>👁️</span> View
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openFileInNewTab(att.file, `${c.title} - ${att.label}`)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Open in new browser window"
+                                                                        >
+                                                                            <span>↗</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => downloadAttachment(att.file, att.fileName)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Download file"
+                                                                        >
+                                                                            <span>⬇️</span>
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+
+                                                            {photoAttachments.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-900 space-y-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span>📸</span> Certificate Images ({photoAttachments.length})
+                                                                    </span>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                                                                        {photoAttachments.map((photoAtt, phIdx) => (
+                                                                            <div
+                                                                                key={photoAtt.id}
+                                                                                onClick={() => openPreview(photoAtt.file, `${c.title} - ${photoAtt.label}`, "Certificate Photo", photoAtt.fileName)}
+                                                                                className="h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-emerald-500 transition relative group shadow-sm"
+                                                                                title={`Click to view photograph ${phIdx + 1} full-size`}
+                                                                            >
+                                                                                <img
+                                                                                    src={photoAtt.file}
+                                                                                    alt={photoAtt.label}
+                                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                    🔍 View
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : hasVerifyUrl ? (
+                                                        <a
+                                                            href={c.verificationUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="px-3 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-xl text-[11px] font-semibold transition inline-flex items-center gap-1"
+                                                        >
+                                                            <span>🔗</span> Verify Credential Online ↗
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5">
+                                                            <span>📂</span> No attachment available
+                                                        </span>
+                                                    )}
+
+                                                    {hasVerifyUrl && hasAttachments && (
+                                                        <a
+                                                            href={c.verificationUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline inline-flex items-center gap-1 ml-auto"
+                                                        >
+                                                            <span>🔗</span> Online Verification ↗
+                                                        </a>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="text-[11px] text-slate-400 flex flex-wrap gap-x-4 gap-y-1">
-                                                <span>Issued By: <strong className="text-slate-300">{c.issuedBy || "—"}</strong></span>
-                                                <span>Issue Date: <strong className="text-slate-300">{c.issueDate || "—"}</strong></span>
-                                                {c.credentialId && <span>Credential ID: <strong className="font-mono text-indigo-400">{c.credentialId}</strong></span>}
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -637,20 +1047,100 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                                 <p className="text-slate-500 italic py-6 text-center">No other academic or co-curricular activities recorded yet.</p>
                             ) : (
                                 <div className="space-y-3">
-                                    {activities.otherActivities.map(a => (
-                                        <div key={a._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2 hover:border-slate-700 transition-colors">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <h5 className="font-bold text-slate-100 text-xs">{a.activityName}</h5>
-                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                                                    {a.category || "Academic"}
-                                                </span>
+                                    {activities.otherActivities.map(a => {
+                                        const recordAttachments = extractRecordAttachments(a, "Academic Activity");
+                                        const docAttachments = recordAttachments.filter(att => !att.isPhoto);
+                                        const photoAttachments = recordAttachments.filter(att => att.isPhoto);
+                                        const hasAttachments = recordAttachments.length > 0;
+
+                                        return (
+                                            <div key={a._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-colors">
+                                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                                    <h5 className="font-bold text-slate-100 text-xs">{a.activityName}</h5>
+                                                    <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                                        {a.category || "Academic"}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 leading-relaxed">{a.description}</p>
+                                                <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-900">
+                                                    Date: <strong className="text-slate-300">{a.date}</strong> &bull; Status: <strong className="text-emerald-400">{a.status || "verified"}</strong>
+                                                </div>
+
+                                                {/* Attachments Section */}
+                                                <div className="pt-2.5 border-t border-slate-900/90 space-y-3">
+                                                    {hasAttachments ? (
+                                                        <div className="space-y-2.5">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {docAttachments.map(att => (
+                                                                    <div key={att.id} className="inline-flex items-center gap-1.5 p-1 bg-slate-900/90 border border-slate-800 rounded-xl shadow-sm">
+                                                                        <span className="text-[10px] font-bold text-indigo-300 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-1">
+                                                                            <span>{att.isPdf ? "📕" : att.isImage ? "🖼️" : "📄"}</span>
+                                                                            <span>{att.label}: {att.info.formatLabel}</span>
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openPreview(att.file, `${a.activityName} - ${att.label}`, "Academic Activity", att.fileName)}
+                                                                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer shadow-sm active:translate-y-0.5"
+                                                                            title="Preview document in viewer"
+                                                                        >
+                                                                            <span>👁️</span> View
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openFileInNewTab(att.file, `${a.activityName} - ${att.label}`)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Open in new browser window"
+                                                                        >
+                                                                            <span>↗</span>
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => downloadAttachment(att.file, att.fileName)}
+                                                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium transition cursor-pointer"
+                                                                            title="Download file"
+                                                                        >
+                                                                            <span>⬇️</span>
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+
+                                                            {photoAttachments.length > 0 && (
+                                                                <div className="pt-2 border-t border-slate-900 space-y-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                                        <span>📸</span> Activity Photographs ({photoAttachments.length})
+                                                                    </span>
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                                                                        {photoAttachments.map((photoAtt, phIdx) => (
+                                                                            <div
+                                                                                key={photoAtt.id}
+                                                                                onClick={() => openPreview(photoAtt.file, `${a.activityName} - ${photoAtt.label}`, "Activity Photo", photoAtt.fileName)}
+                                                                                className="h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/80 cursor-pointer hover:border-indigo-500 transition relative group shadow-sm"
+                                                                                title={`Click to view photograph ${phIdx + 1} full-size`}
+                                                                            >
+                                                                                <img
+                                                                                    src={photoAtt.file}
+                                                                                    alt={photoAtt.label}
+                                                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                />
+                                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                    🔍 View
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5">
+                                                            <span>📂</span> No attachment available
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <p className="text-[11px] text-slate-400 leading-relaxed">{a.description}</p>
-                                            <div className="text-[10px] text-slate-500 pt-1 border-t border-slate-900">
-                                                Date: <strong className="text-slate-300">{a.date}</strong> &bull; Status: <strong className="text-emerald-400">{a.status || "verified"}</strong>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -847,6 +1337,13 @@ function FacultyDetailedProfile({ facultyId, facultyData, onBack, departmentName
                     </div>
                 </div>
             )}
+
+            {/* Universal Attachment Preview Modal */}
+            <DocumentViewerModal
+                isOpen={!!previewDoc}
+                onClose={() => setPreviewDoc(null)}
+                document={previewDoc}
+            />
         </div>
     );
 }

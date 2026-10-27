@@ -40,11 +40,16 @@ const workshopSchema = new mongoose.Schema({
     scannedInvitation: { type: String, default: "" }, // Base64 document / image
     scannedThankingLetter: { type: String, default: "" }, // Base64 document / image
     scannedOfficialLetter: { type: String, default: "" }, // Base64 document / image
+    certificate: { type: String, default: "" }, // Certificate of attendance/completion
+    certificateBase64: { type: String, default: "" },
+    certificateFile: { type: String, default: "" },
+    documentPath: { type: String, default: "" },
     invitationSentAt: { type: Date, default: null },
     thankingSentAt: { type: Date, default: null },
     officialLetterSentAt: { type: Date, default: null },
     photos: [String],
     videos: [String],
+    attachments: [String],
     studentAttendance: [String],
     feedbacks: [{
         name: { type: String, default: "" },

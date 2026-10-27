@@ -24,6 +24,12 @@ const certificationSchema = new mongoose.Schema({
     credentialId: { type: String, default: "" }, // Optional
     verificationUrl: { type: String, default: "" }, // Optional
     certificateFile: { type: String, default: "" }, // Base64 representation of PDF/Image
+    certificateBase64: { type: String, default: "" },
+    certificate: { type: String, default: "" },
+    filePath: { type: String, default: "" },
+    documentPath: { type: String, default: "" },
+    attachments: [{ type: String }],
+    photos: [{ type: String }],
     status: { type: String, enum: ["Active", "Expired"], default: "Active" }
 }, {
     timestamps: true

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { api } from "../services/api";
 import WorkshopLetterModal from "./WorkshopLetterModal";
+import { openFileInNewTab, downloadAttachment } from "../utils/attachmentUtils";
 
 function EventsPanel({ currentUser }) {
     const [events, setEvents] = useState([]);
@@ -1185,24 +1186,42 @@ function EventsPanel({ currentUser }) {
                                             </h4>
                                             <div className="flex flex-wrap gap-2">
                                                 {selectedEvent.scannedInvitation && (
-                                                    <a
-                                                        href={selectedEvent.scannedInvitation}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="px-3 py-1.5 bg-indigo-950/80 border border-indigo-700/60 text-indigo-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-900 transition"
-                                                    >
-                                                        <span>📜</span> View Signed Invitation Scan
-                                                    </a>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openFileInNewTab(selectedEvent.scannedInvitation, `${selectedEvent.title} - Signed Invitation Letter`)}
+                                                            className="px-3 py-1.5 bg-indigo-950/80 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-indigo-900 transition cursor-pointer"
+                                                        >
+                                                            <span>📜</span> View Signed Invitation Scan
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => downloadAttachment(selectedEvent.scannedInvitation, `${selectedEvent.title.replace(/\s+/g, "_")}_Invitation.pdf`)}
+                                                            className="p-1.5 bg-indigo-950/80 border border-indigo-700/60 text-indigo-300 hover:text-white rounded-lg text-xs transition cursor-pointer"
+                                                            title="Download file"
+                                                        >
+                                                            <span>⬇️</span>
+                                                        </button>
+                                                    </div>
                                                 )}
                                                 {selectedEvent.scannedThankingLetter && (
-                                                    <a
-                                                        href={selectedEvent.scannedThankingLetter}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="px-3 py-1.5 bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-900 transition"
-                                                    >
-                                                        <span>🤝</span> View Signed Thanking Letter Scan
-                                                    </a>
+                                                    <div className="inline-flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openFileInNewTab(selectedEvent.scannedThankingLetter, `${selectedEvent.title} - Signed Thanking Letter`)}
+                                                            className="px-3 py-1.5 bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 hover:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-900 transition cursor-pointer"
+                                                        >
+                                                            <span>🤝</span> View Signed Thanking Letter Scan
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => downloadAttachment(selectedEvent.scannedThankingLetter, `${selectedEvent.title.replace(/\s+/g, "_")}_Thanking.pdf`)}
+                                                            className="p-1.5 bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 hover:text-white rounded-lg text-xs transition cursor-pointer"
+                                                            title="Download file"
+                                                        >
+                                                            <span>⬇️</span>
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

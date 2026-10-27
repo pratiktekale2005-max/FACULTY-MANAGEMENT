@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const activitySchema = new mongoose.Schema({
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization", required: true },
+    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     activityName: { type: String, required: true },
     date: { type: String, required: true },
@@ -22,6 +22,11 @@ const activitySchema = new mongoose.Schema({
     academicYear: { type: String, default: "2026-2027" },
     participationDetails: { type: String, default: "" },
     documentPath: { type: String, default: "" },
+    documentBase64: { type: String, default: "" },
+    certificateFile: { type: String, default: "" },
+    certificate: { type: String, default: "" },
+    attachments: [{ type: String }],
+    photos: [{ type: String }],
     status: { type: String, enum: ["pending", "verified", "rejected", "returned"], default: "pending" },
     createdAt: { type: Date, default: Date.now }
 });

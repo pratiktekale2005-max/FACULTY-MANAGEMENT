@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
+import DocumentViewerModal from "./DocumentViewerModal";
 
 function PrincipalResearchPapers({ currentUser }) {
     const [papers, setPapers] = useState([]);
@@ -752,49 +753,17 @@ function PrincipalResearchPapers({ currentUser }) {
             )}
 
             {/* ================= MODAL: DOCUMENT / CERTIFICATE PREVIEW ================= */}
-            {selectedDocPreview && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="bg-[#101622] border border-slate-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col p-5 space-y-4 shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                            <div>
-                                <h4 className="text-xs font-bold text-slate-200">{selectedDocPreview.type}</h4>
-                                <p className="text-[10px] text-slate-400 truncate max-w-lg">{selectedDocPreview.title}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <a
-                                    href={selectedDocPreview.file}
-                                    download={`${selectedDocPreview.title.replace(/\s+/g, "_")}.pdf`}
-                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-all"
-                                >
-                                    ⬇️ Download
-                                </a>
-                                <button
-                                    onClick={() => setSelectedDocPreview(null)}
-                                    className="w-7 h-7 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 bg-slate-950 rounded-xl overflow-hidden border border-slate-850 flex items-center justify-center">
-                            {selectedDocPreview.file.startsWith("data:application/pdf") ? (
-                                <iframe
-                                    src={selectedDocPreview.file}
-                                    title="PDF Document"
-                                    className="w-full h-full border-0"
-                                />
-                            ) : (
-                                <img
-                                    src={selectedDocPreview.file}
-                                    alt="Preview"
-                                    className="max-w-full max-h-full object-contain"
-                                />
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <DocumentViewerModal
+                isOpen={!!selectedDocPreview}
+                onClose={() => setSelectedDocPreview(null)}
+                document={selectedDocPreview ? {
+                    url: selectedDocPreview.file,
+                    title: selectedDocPreview.title,
+                    subtitle: selectedDocPreview.type,
+                    category: "Research Paper",
+                    fileName: `${(selectedDocPreview.title || "Paper").replace(/\s+/g, "_")}.pdf`
+                } : null}
+            />
 
         </div>
     );

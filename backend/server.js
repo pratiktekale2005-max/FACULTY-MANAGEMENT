@@ -41,7 +41,12 @@ const submissionRoutes = require("./routes/submissionRoutes");
 const app = express();
 
 // Security Middleware
-app.use(helmet({ contentSecurityPolicy: false })); // Disable CSP to allow loading base64 images locally
+app.use(helmet({ 
+    contentSecurityPolicy: false, // Disable CSP to allow loading base64 images locally
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+    frameguard: false // allow modal framing / embedding in application viewer
+}));
 app.use(cors());
 
 // Rate Limiting
@@ -63,6 +68,19 @@ app.use((req, res, next) => {
     req.params = mongoSanitize(req.params);
     next();
 });
+
+// Serve uploads directory statically if files are stored on disk
+const path = require("path");
+const fs = require("fs");
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use("/uploads", (req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+}, express.static(uploadsDir));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm")

@@ -15,8 +15,19 @@ router.get("/", authenticateUser, async (req, res) => {
         if (role === "Faculty") {
             query.facultyId = req.user._id;
         } else if (role === "HOD") {
-            const memberIds = await User.find({ departmentId: req.user.departmentId }).distinct("_id");
-            query.facultyId = { $in: memberIds };
+            const memberIds = await User.find({
+                organizationId,
+                $or: [
+                    { departmentId: req.user.departmentId },
+                    { department: req.user.department },
+                    { _id: req.user._id }
+                ]
+            }).distinct("_id");
+            query.$or = [
+                { facultyId: { $in: memberIds } },
+                { userId: { $in: memberIds } },
+                { submittedBy: { $in: memberIds } }
+            ];
         } else {
             // Principal / Admin
             if (organizationId) {

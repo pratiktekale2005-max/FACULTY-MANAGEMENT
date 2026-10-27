@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
+import { openFileInNewTab, downloadAttachment } from "../utils/attachmentUtils";
 
 function MyProfileView({ currentUser, onRefresh }) {
     const [profile, setProfile] = useState(null);
@@ -328,14 +329,25 @@ function MyProfileView({ currentUser, onRefresh }) {
                             <span>{isEditing ? "✕ Cancel Editing" : "✏️ Edit Profile Information"}</span>
                         </button>
 
-                        {activeData.resumePath && (
-                            <a
-                                href={activeData.resumePath}
-                                download={`${(activeData.name || "My").replace(/\s+/g, "_")}_CV.pdf`}
-                                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow"
-                            >
-                                <span>📥 Download Curriculum Vitae (PDF)</span>
-                            </a>
+                        {(activeData.resumePath || activeData.cvPath) && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => openFileInNewTab(activeData.resumePath || activeData.cvPath, `${activeData.name || "Faculty"} - Curriculum Vitae (PDF)`)}
+                                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow cursor-pointer"
+                                >
+                                    <span>👁️</span>
+                                    <span>View CV (PDF)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => downloadAttachment(activeData.resumePath || activeData.cvPath, `${(activeData.name || "My").replace(/\s+/g, "_")}_CV.pdf`)}
+                                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow cursor-pointer"
+                                >
+                                    <span>📥</span>
+                                    <span>Download CV</span>
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>

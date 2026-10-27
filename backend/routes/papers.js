@@ -31,8 +31,19 @@ router.get("/", authenticateUser, async (req, res) => {
             } else if (requestedTargetId && requestedTargetId !== "all") {
                 query.submittedBy = requestedTargetId;
             } else {
-                const memberIds = await User.find({ organizationId, departmentId: req.user.departmentId }).distinct("_id");
-                query.submittedBy = { $in: memberIds };
+                const memberIds = await User.find({
+                    organizationId,
+                    $or: [
+                        { departmentId: req.user.departmentId },
+                        { department: req.user.department },
+                        { _id: req.user._id }
+                    ]
+                }).distinct("_id");
+                query.$or = [
+                    { submittedBy: { $in: memberIds } },
+                    { userId: { $in: memberIds } },
+                    { facultyId: { $in: memberIds } }
+                ];
             }
         } else if (role === "Faculty") {
             // Faculty strictly sees only their own papers

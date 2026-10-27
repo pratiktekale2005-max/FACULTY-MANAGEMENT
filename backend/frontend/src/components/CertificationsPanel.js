@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { api } from "../services/api";
+import DocumentViewerModal from "./DocumentViewerModal";
+import { openFileInNewTab, downloadAttachment, getAttachmentInfo } from "../utils/attachmentUtils";
 
 const CERTIFICATE_TYPES = [
     "Training", "Workshop", "FDP", "STTP", "Certification Course",
@@ -174,21 +176,13 @@ function CertificationsPanel({ currentUser }) {
 
     // Trigger file download
     const handleDownload = (cert) => {
-        const fileContent = cert.file || cert.certificateFile;
+        const fileContent = cert.file || cert.certificateFile || cert.certificate || cert.certificateBase64 || cert.documentPath;
         if (!fileContent) {
             setErrorMsg("No certificate file uploaded to download.");
             return;
         }
-        let extension = "png";
-        if (fileContent.includes("pdf")) extension = "pdf";
-        else if (fileContent.includes("jpeg") || fileContent.includes("jpg")) extension = "jpg";
-
-        const link = document.createElement("a");
-        link.href = fileContent;
-        link.download = `${cert.title.replace(/\s+/g, "_")}_Certificate.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const info = getAttachmentInfo(fileContent);
+        downloadAttachment(fileContent, `${(cert.title || "Certificate").replace(/\s+/g, "_")}.${info.extension}`);
     };
 
     // Filters logic
@@ -319,7 +313,7 @@ function CertificationsPanel({ currentUser }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {paginatedCerts.map(cert => {
                         const isExpired = cert.status === "Expired" || (cert.expiryDate && new Date(cert.expiryDate) < new Date());
-                        const certFile = cert.file || cert.certificateFile;
+                        const certFile = cert.file || cert.certificateFile || cert.certificate || cert.certificateBase64 || cert.documentPath;
                         const certType = cert.type || cert.certificateType || "Certification";
 
                         return (
@@ -388,9 +382,18 @@ function CertificationsPanel({ currentUser }) {
                                     {certFile && (
                                         <button
                                             onClick={() => setPreviewCert(cert)}
-                                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition cursor-pointer"
+                                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition cursor-pointer flex items-center gap-1 shadow-sm"
                                         >
                                             👁️ Preview
+                                        </button>
+                                    )}
+                                    {certFile && (
+                                        <button
+                                            onClick={() => openFileInNewTab(certFile, `${cert.title} - Certificate`)}
+                                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 transition cursor-pointer"
+                                            title="Open in new window"
+                                        >
+                                            ↗
                                         </button>
                                     )}
                                     {certFile && (
@@ -612,41 +615,18 @@ function CertificationsPanel({ currentUser }) {
                 </div>
             )}
 
-            {/* Document Preview Modal */}
-            {previewCert && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-3xl p-5 space-y-4 shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                            <div>
-                                <h3 className="text-sm font-bold text-white">{previewCert.title}</h3>
-                                <p className="text-[11px] text-slate-400 font-mono">{previewCert.issuedBy} &bull; {previewCert.type || previewCert.certificateType}</p>
-                            </div>
-                            <button
-                                onClick={() => setPreviewCert(null)}
-                                className="text-slate-400 hover:text-white text-base px-2 py-1"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden p-2 flex items-center justify-center min-h-[400px] max-h-[70vh]">
-                            {(previewCert.file || previewCert.certificateFile || "").includes("pdf") ? (
-                                <iframe
-                                    src={previewCert.file || previewCert.certificateFile}
-                                    title="Certificate Preview PDF"
-                                    className="w-full h-[500px] border-0"
-                                />
-                            ) : (
-                                <img
-                                    src={previewCert.file || previewCert.certificateFile}
-                                    alt="Certificate Preview"
-                                    className="max-w-full max-h-[500px] object-contain rounded"
-                                />
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Universal Document Preview Modal */}
+            <DocumentViewerModal
+                isOpen={!!previewCert}
+                onClose={() => setPreviewCert(null)}
+                document={previewCert ? {
+                    url: previewCert.file || previewCert.certificateFile || previewCert.certificate || previewCert.certificateBase64 || previewCert.documentPath,
+                    title: previewCert.title,
+                    subtitle: `${previewCert.issuedBy || "Certificate"} • ${previewCert.type || previewCert.certificateType || "Certification"}`,
+                    category: "Certification",
+                    fileName: `${(previewCert.title || "Certificate").replace(/\s+/g, "_")}.pdf`
+                } : null}
+            />
         </div>
     );
 }

@@ -12,8 +12,19 @@ router.get("/", authenticateUser, async (req, res) => {
         let query = { organizationId };
 
         if (role === "HOD") {
-            const memberIds = await User.find({ organizationId, departmentId: req.user.departmentId }).distinct("_id");
-            query.userId = { $in: memberIds };
+            const memberIds = await User.find({
+                organizationId,
+                $or: [
+                    { departmentId: req.user.departmentId },
+                    { department: req.user.department },
+                    { _id: req.user._id }
+                ]
+            }).distinct("_id");
+            query.$or = [
+                { userId: { $in: memberIds } },
+                { submittedBy: { $in: memberIds } },
+                { facultyId: { $in: memberIds } }
+            ];
         } else if (role === "Faculty") {
             query.userId = req.user._id;
         }

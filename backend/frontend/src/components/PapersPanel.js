@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { api } from "../services/api";
+import { openFileInNewTab, downloadAttachment } from "../utils/attachmentUtils";
 
 const INDEXING_OPTIONS = ["Scopus", "Web of Science", "IEEE Xplore", "UGC CARE", "PubMed", "SCI / SCIE", "Peer Reviewed", "Other"];
 const STATUS_OPTIONS = ["Published", "Accepted", "Under Review", "Communicated"];
@@ -437,14 +438,25 @@ function PapersPanel({ currentUser, refreshTrigger, onRefresh }) {
                                                 </a>
                                             )}
                                             {p.fileBase64 && (
-                                                <a
-                                                    href={p.fileBase64}
-                                                    download={`${p.title.replace(/\s+/g, "_")}_preprint.pdf`}
-                                                    className="text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-700/40 inline-flex items-center gap-1 transition"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openFileInNewTab(p.fileBase64, `${p.title} - Preprint PDF`)}
+                                                    className="text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 px-2 py-1 rounded-lg border border-indigo-700/40 inline-flex items-center gap-1 transition cursor-pointer"
+                                                    title="View publication PDF"
+                                                >
+                                                    <span>👁️</span>
+                                                    <span>PDF</span>
+                                                </button>
+                                            )}
+                                            {p.fileBase64 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => downloadAttachment(p.fileBase64, `${p.title.replace(/\s+/g, "_")}_preprint.pdf`)}
+                                                    className="text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 px-2 py-1 rounded-lg border border-emerald-700/40 inline-flex items-center gap-1 transition cursor-pointer"
+                                                    title="Download publication PDF"
                                                 >
                                                     <span>📥</span>
-                                                    <span>PDF</span>
-                                                </a>
+                                                </button>
                                             )}
                                         </div>
 
@@ -565,15 +577,23 @@ function PapersPanel({ currentUser, refreshTrigger, onRefresh }) {
                                 </div>
 
                                 {activePaper.fileBase64 && (
-                                    <div className="pt-2">
-                                        <a
-                                            href={activePaper.fileBase64}
-                                            download={`${activePaper.title.replace(/\s+/g, "_")}_preprint.pdf`}
+                                    <div className="pt-2 flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openFileInNewTab(activePaper.fileBase64, `${activePaper.title} - Publication PDF`)}
                                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl inline-flex items-center gap-2 font-semibold transition cursor-pointer"
                                         >
+                                            <span>👁️</span>
+                                            <span>View Paper PDF</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => downloadAttachment(activePaper.fileBase64, `${activePaper.title.replace(/\s+/g, "_")}_preprint.pdf`)}
+                                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl inline-flex items-center gap-2 font-semibold transition cursor-pointer"
+                                        >
                                             <span>📥</span>
-                                            <span>Download Preprint PDF</span>
-                                        </a>
+                                            <span>Download PDF</span>
+                                        </button>
                                     </div>
                                 )}
 

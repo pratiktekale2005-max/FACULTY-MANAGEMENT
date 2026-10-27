@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Workshop = require("../models/Workshop");
 const Paper = require("../models/Paper");
@@ -71,27 +72,91 @@ router.get("/:id/full-profile", authenticateUser, async (req, res) => {
             return res.status(404).json({ error: "Faculty not found ❌" });
         }
 
-        // HOD isolation check
+        // HOD isolation check: Check both departmentId and department name
         if (role === "HOD") {
             const facultyDeptId = faculty.departmentId?._id || faculty.departmentId;
-            if (String(facultyDeptId) !== String(req.user.departmentId)) {
+            const hodDeptId = req.user.departmentId?._id || req.user.departmentId;
+            const sameDeptId = facultyDeptId && hodDeptId && String(facultyDeptId) === String(hodDeptId);
+            const sameDeptName = faculty.department && req.user.department && faculty.department.trim().toLowerCase() === req.user.department.trim().toLowerCase();
+            const isSelf = String(faculty._id) === String(req.user._id);
+            if (!sameDeptId && !sameDeptName && !isSelf) {
                 return res.status(403).json({ error: "Forbidden: Faculty belongs to another department ❌" });
             }
         }
 
-        // Fetch associated activities from collections
+        const userObjId = mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
+        const idMatches = [userObjId];
+        if (typeof id === "string" && !idMatches.includes(id)) {
+            idMatches.push(id);
+        }
+
+        const orgFilter = req.user.organizationId ? {
+            $or: [
+                { organizationId: req.user.organizationId },
+                { organizationId: { $exists: false } },
+                { organizationId: null }
+            ]
+        } : {};
+
+        // Fetch associated activities from collections with robust field matching
         const [workshops, papers, certifications, activities, subjects, feedbacks] = await Promise.all([
-            Workshop.find({ submittedBy: id }).sort({ date: -1, createdAt: -1 }),
-            Paper.find({ submittedBy: id }).sort({ date: -1, createdAt: -1 }),
-            Certification.find({ facultyId: id }).sort({ issueDate: -1, createdAt: -1 }),
-            Activity.find({ userId: id }).sort({ date: -1, createdAt: -1 }),
-            Subject.find({ userId: id }).sort({ createdAt: -1 }),
-            Feedback.find({ facultyId: id }).sort({ submittedAt: -1 })
+            Workshop.find({
+                ...orgFilter,
+                $or: [
+                    { submittedBy: { $in: idMatches } },
+                    { userId: { $in: idMatches } },
+                    { facultyId: { $in: idMatches } },
+                    ...(faculty.email ? [{ "coordinators.email": faculty.email }] : [])
+                ]
+            }).sort({ date: -1, createdAt: -1 }),
+            Paper.find({
+                ...orgFilter,
+                $or: [
+                    { submittedBy: { $in: idMatches } },
+                    { userId: { $in: idMatches } },
+                    { facultyId: { $in: idMatches } },
+                    ...(faculty.email ? [{ authorEmail: faculty.email }] : [])
+                ]
+            }).sort({ date: -1, createdAt: -1 }),
+            Certification.find({
+                ...orgFilter,
+                $or: [
+                    { facultyId: { $in: idMatches } },
+                    { userId: { $in: idMatches } },
+                    { submittedBy: { $in: idMatches } }
+                ]
+            }).sort({ issueDate: -1, createdAt: -1 }),
+            Activity.find({
+                ...orgFilter,
+                $or: [
+                    { userId: { $in: idMatches } },
+                    { submittedBy: { $in: idMatches } },
+                    { facultyId: { $in: idMatches } }
+                ]
+            }).sort({ date: -1, createdAt: -1 }),
+            Subject.find({
+                ...orgFilter,
+                $or: [
+                    { userId: { $in: idMatches } },
+                    { facultyId: { $in: idMatches } }
+                ]
+            }).sort({ createdAt: -1 }),
+            Feedback.find({
+                ...orgFilter,
+                $or: [
+                    { facultyId: { $in: idMatches } },
+                    { userId: { $in: idMatches } }
+                ]
+            }).sort({ submittedAt: -1 })
         ]);
 
-        // Calculate activity statistics
-        const workshopItems = workshops.filter(w => !(w.workshopType && w.workshopType.toLowerCase().includes("seminar")) && !(w.title && w.title.toLowerCase().includes("seminar")));
-        const seminarItems = workshops.filter(w => (w.workshopType && w.workshopType.toLowerCase().includes("seminar")) || (w.title && w.title.toLowerCase().includes("seminar")));
+        // Calculate activity statistics and classify workshops vs seminars
+        const isSeminar = (w) => {
+            const str = `${w.title || ""} ${w.workshopType || ""} ${w.category || ""} ${w.eventType || ""}`.toLowerCase();
+            return str.includes("seminar") || str.includes("guest lecture") || str.includes("webinar");
+        };
+        const seminarItems = workshops.filter(isSeminar);
+        const workshopItems = workshops.filter(w => !isSeminar(w));
 
         const workshopsOrganized = workshops.filter(w => w.eventType === "organized" || w.workshopType === "Arranged by Self").length;
         const workshopsAttended = workshops.filter(w => w.eventType === "attended" || w.workshopType === "Attended" || w.workshopType === "External").length;
@@ -337,10 +402,14 @@ router.get("/:id", authenticateUser, async (req, res) => {
             return res.status(404).json({ error: "Faculty not found ❌" });
         }
 
-        // HOD isolation check
+        // HOD isolation check: Check both departmentId and department name
         if (role === "HOD") {
             const facultyDeptId = faculty.departmentId?._id || faculty.departmentId;
-            if (String(facultyDeptId) !== String(req.user.departmentId)) {
+            const hodDeptId = req.user.departmentId?._id || req.user.departmentId;
+            const sameDeptId = facultyDeptId && hodDeptId && String(facultyDeptId) === String(hodDeptId);
+            const sameDeptName = faculty.department && req.user.department && faculty.department.trim().toLowerCase() === req.user.department.trim().toLowerCase();
+            const isSelf = String(faculty._id) === String(req.user._id);
+            if (!sameDeptId && !sameDeptName && !isSelf) {
                 return res.status(403).json({ error: "Forbidden: Faculty belongs to another department ❌" });
             }
         }
