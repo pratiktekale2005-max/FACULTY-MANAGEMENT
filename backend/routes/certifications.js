@@ -10,6 +10,7 @@ router.get("/", authenticateUser, async (req, res) => {
     try {
         const { role, organizationId } = req.user;
         let query = {};
+        let roleOrCondition = null;
 
         // Role-based scoping
         if (role === "Faculty") {
@@ -23,7 +24,7 @@ router.get("/", authenticateUser, async (req, res) => {
                     { _id: req.user._id }
                 ]
             }).distinct("_id");
-            query.$or = [
+            roleOrCondition = [
                 { facultyId: { $in: memberIds } },
                 { userId: { $in: memberIds } },
                 { submittedBy: { $in: memberIds } }
@@ -43,10 +44,19 @@ router.get("/", authenticateUser, async (req, res) => {
             if (mongoose.Types.ObjectId.isValid(filterUserId)) {
                 const targetUser = await User.findById(filterUserId);
                 if (targetUser) {
-                    if (role === "HOD" && String(targetUser.departmentId) !== String(req.user.departmentId)) {
-                        return res.status(403).json({ error: "Access denied: target user belongs to another department ❌" });
+                    if (role === "HOD") {
+                        const targetDeptId = targetUser.departmentId?._id || targetUser.departmentId;
+                        const hodDeptId = req.user.departmentId?._id || req.user.departmentId;
+                        const sameDeptId = targetDeptId && hodDeptId && String(targetDeptId) === String(hodDeptId);
+                        const sameDeptName = targetUser.department && req.user.department &&
+                            targetUser.department.trim().toLowerCase() === req.user.department.trim().toLowerCase();
+                        const isSelf = String(targetUser._id) === String(req.user._id);
+                        if (!sameDeptId && !sameDeptName && !isSelf) {
+                            return res.status(403).json({ error: "Access denied: target user belongs to another department ❌" });
+                        }
                     }
                     query.facultyId = targetUser._id;
+                    roleOrCondition = null;
                 }
             }
         }
@@ -68,20 +78,35 @@ router.get("/", authenticateUser, async (req, res) => {
         }
 
         // Search in title, issuedBy, description, skills
+        let searchCondition = null;
         if (req.query.search) {
             const searchRegex = new RegExp(req.query.search, "i");
-            query.$or = [
-                { title: searchRegex },
-                { issuedBy: searchRegex },
-                { description: searchRegex },
-                { skills: searchRegex },
-                { certificateNumber: searchRegex }
-            ];
+            searchCondition = {
+                $or: [
+                    { title: searchRegex },
+                    { issuedBy: searchRegex },
+                    { description: searchRegex },
+                    { skills: searchRegex },
+                    { certificateNumber: searchRegex }
+                ]
+            };
         }
 
         // Date range filtering
         if (req.query.startDate && req.query.endDate) {
             query.issueDate = { $gte: req.query.startDate, $lte: req.query.endDate };
+        }
+
+        // Build final query combining role $or and search conditions
+        const andConditions = [];
+        if (roleOrCondition) {
+            andConditions.push({ $or: roleOrCondition });
+        }
+        if (searchCondition) {
+            andConditions.push(searchCondition);
+        }
+        if (andConditions.length > 0) {
+            query.$and = andConditions;
         }
 
         // Pagination parameters

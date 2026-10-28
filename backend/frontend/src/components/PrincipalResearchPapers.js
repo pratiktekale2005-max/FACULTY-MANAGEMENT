@@ -757,7 +757,7 @@ function PrincipalResearchPapers({ currentUser }) {
                 isOpen={!!selectedDocPreview}
                 onClose={() => setSelectedDocPreview(null)}
                 document={selectedDocPreview ? {
-                    url: selectedDocPreview.file,
+                    file: selectedDocPreview.file,
                     title: selectedDocPreview.title,
                     subtitle: selectedDocPreview.type,
                     category: "Research Paper",

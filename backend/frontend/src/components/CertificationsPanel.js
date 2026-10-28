@@ -620,7 +620,8 @@ function CertificationsPanel({ currentUser }) {
                 isOpen={!!previewCert}
                 onClose={() => setPreviewCert(null)}
                 document={previewCert ? {
-                    url: previewCert.file || previewCert.certificateFile || previewCert.certificate || previewCert.certificateBase64 || previewCert.documentPath,
+                    file: previewCert.file || previewCert.certificateFile || previewCert.certificate || previewCert.certificateBase64 || previewCert.documentPath || previewCert.filePath,
+                    type: "Certification",
                     title: previewCert.title,
                     subtitle: `${previewCert.issuedBy || "Certificate"} • ${previewCert.type || previewCert.certificateType || "Certification"}`,
                     category: "Certification",
