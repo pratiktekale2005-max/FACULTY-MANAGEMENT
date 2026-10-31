@@ -88,15 +88,41 @@ app.use("/uploads", (req, res, next) => {
     next();
 }, express.static(uploadsDir));
 
-// MongoDB Connection
-let mongoUri = (process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm").trim();
-if ((mongoUri.startsWith('"') && mongoUri.endsWith('"')) || (mongoUri.startsWith("'") && mongoUri.endsWith("'"))) {
-    mongoUri = mongoUri.slice(1, -1).trim();
-}
-if (mongoUri.startsWith("MONGO_URI=")) {
-    mongoUri = mongoUri.replace(/^MONGO_URI=/, "").trim();
+// MongoDB Connection & Safe URI Formatting
+function formatMongoUri(raw) {
+    let uri = (raw || "mongodb://127.0.0.1:27017/crm").trim();
+    // Strip wrapping quotes if entered in dashboard
+    if ((uri.startsWith('"') && uri.endsWith('"')) || (uri.startsWith("'") && uri.endsWith("'"))) {
+        uri = uri.slice(1, -1).trim();
+    }
+    // Strip key prefix if entered as MONGO_URI=mongodb+srv://...
+    if (uri.startsWith("MONGO_URI=")) {
+        uri = uri.replace(/^MONGO_URI=/, "").trim();
+    }
+
+    const match = uri.match(/^(mongodb(?:\+srv)?:\/\/)([^:]+):([^@]+)@(.+)$/);
+    if (match) {
+        const protocol = match[1];
+        let user = match[2];
+        let pass = match[3];
+        const rest = match[4];
+
+        // Fix unescaped '%' in password or username (which causes URI malformed in decodeURIComponent)
+        pass = pass.replace(/%(?![0-9A-Fa-f]{2})/g, "%25");
+        user = user.replace(/%(?![0-9A-Fa-f]{2})/g, "%25");
+
+        try {
+            decodeURIComponent(pass);
+            decodeURIComponent(user);
+            uri = `${protocol}${user}:${pass}@${rest}`;
+        } catch (e) {
+            console.warn("Could not auto-decode password, using original URI:", e.message);
+        }
+    }
+    return uri;
 }
 
+const mongoUri = formatMongoUri(process.env.MONGO_URI);
 const safeLogUri = mongoUri.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@");
 console.log("Connecting to MongoDB:", safeLogUri);
 
@@ -104,11 +130,10 @@ mongoose.connect(mongoUri)
     .then(() => {
         console.log("MongoDB Connected ✅");
     })
-    .catch((err) => console.log("DB Error:", err));
+    .catch((err) => console.error("DB Error:", err));
 
 // ================= ROUTES =================
 
-// Home Route
 app.get("/", (req, res) => {
     res.send("CRM Backend Running 🚀");
 });
