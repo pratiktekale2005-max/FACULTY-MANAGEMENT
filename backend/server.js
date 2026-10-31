@@ -1,7 +1,9 @@
 require("dotenv").config();
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
-dns.setServers(["1.1.1.1", "8.8.8.8"]);
+if (!process.env.RENDER && process.env.NODE_ENV !== "production") {
+    dns.setServers(["1.1.1.1", "8.8.8.8"]);
+}
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -40,6 +42,9 @@ const submissionRoutes = require("./routes/submissionRoutes");
 // Create app
 const app = express();
 
+// Trust reverse proxy for Render / Cloud deployments
+app.set("trust proxy", 1);
+
 // Security Middleware
 app.use(helmet({ 
     contentSecurityPolicy: false, // Disable CSP to allow loading base64 images locally
@@ -53,7 +58,8 @@ app.use(cors());
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 1000, // Limit each IP to 1000 requests per 15 minutes
-    message: { error: "Too many requests from this IP, please try again later ⏱️" }
+    message: { error: "Too many requests from this IP, please try again later ⏱️" },
+    validate: { xForwardedForHeader: false }
 });
 app.use("/api/", apiLimiter);
 
@@ -83,7 +89,18 @@ app.use("/uploads", (req, res, next) => {
 }, express.static(uploadsDir));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm")
+let mongoUri = (process.env.MONGO_URI || "mongodb://127.0.0.1:27017/crm").trim();
+if ((mongoUri.startsWith('"') && mongoUri.endsWith('"')) || (mongoUri.startsWith("'") && mongoUri.endsWith("'"))) {
+    mongoUri = mongoUri.slice(1, -1).trim();
+}
+if (mongoUri.startsWith("MONGO_URI=")) {
+    mongoUri = mongoUri.replace(/^MONGO_URI=/, "").trim();
+}
+
+const safeLogUri = mongoUri.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@");
+console.log("Connecting to MongoDB:", safeLogUri);
+
+mongoose.connect(mongoUri)
     .then(() => {
         console.log("MongoDB Connected ✅");
     })
@@ -185,7 +202,7 @@ app.use("/api/submissions", submissionRoutes);
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT} 🚀`);
+    console.log(`Server running on port ${PORT} 🚀`);
 });
 
 // Check Email Configuration
